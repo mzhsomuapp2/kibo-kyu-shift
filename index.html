@@ -617,7 +617,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function lateChange(dateStr){var ps=periodStartForDate(parseYmd(dateStr));return newRules(ps)&&isPublished(ps);}
   function isOwn(r){if(!state.viewer||isAdmin())return false;if(r.memberId)return r.memberId===state.viewer;var me=memberById(state.viewer);return !!me&&me.name===r.name;}
   // 受注の希望休だけ、公開前は本人と作成者以外に見せない（経理は常に表示）
-  function canSee(r){if(isMemo(r)||r.team!=="受注"||isAdmin()||isOwn(r))return true;return isPublished(reqPeriod(r));}
+  // 非公開は受注メンバーどうしだけ。経理チームの人は締切前でも受注の希望休を見てよい（名前未選択は非公開）
+  function canSee(r){if(isMemo(r)||r.team!=="受注"||isAdmin()||isOwn(r))return true;var me=memberById(state.viewer);if(me&&me.team!=="受注")return true;return isPublished(reqPeriod(r));}
   // 公開後は作成者だけが修正できる（勤務メモは休みに影響しないので、本人は締切後も修正できる）
   function canEdit(r){if(isAdmin())return true;if(isMemo(r))return isOwn(r)||!newRules(reqPeriod(r));if(!newRules(reqPeriod(r)))return true;return isOwn(r)&&!isPublished(reqPeriod(r));}
   function visibleRequests(){return state.requests.filter(canSee);}
@@ -971,7 +972,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var pub=isPublished(s),pa=publishAt(s),parts=[];
     if(pub)parts.push('<span class="open">公開済み</span><span>受注の希望休も全員に表示中。修正はシフト作成者のみ</span>');
     else{
-      parts.push('<span class="lock">受注の希望休は非公開</span><span><b>'+(pa.getMonth()+1)+'/'+pa.getDate()+' 0:00</b> に公開（それまでは本人と作成者だけに表示）</span>');
+      parts.push('<span class="lock">受注の希望休は非公開</span><span><b>'+(pa.getMonth()+1)+'/'+pa.getDate()+' 0:00</b> に公開（それまでは受注メンバーどうしでは見えません。本人・経理チーム・作成者には表示）</span>');
       if(isAdmin())parts.push('<button class="btn sm" data-act="publish-now">今すぐ公開</button>');
     }
     var o=rotationOrder(s);
@@ -1085,7 +1086,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     });
     var badge=draft?'<span class="badge-unsaved">未保存の変更あり</span>':(savedDoc?'<span class="badge-saved">シフト保存済み '+shortTime(savedDoc.at)+'</span>':'');
     var shiftCtrl='<div class="shiftbar">'+
-      '<button class="btn primary" data-act="shift-gen"'+(state.members.length?'':' disabled')+'>'+(kou?'シフト再作成':'シフト自動作成')+'</button>'+
+      genButtons(state.members.length>0,kou)+
       (draft?'<button class="btn" data-act="shift-save">保存</button><button class="btn ghost" data-act="shift-discard">取消</button>':'')+
       badge+'<span class="grow"></span>'+
       '<span class="hint">'+(kou?'日付をタップして各人の勤務/公休/有給を調整':'自動作成で公休を割り当て（希望休・定休日・固定休は反映）')+'</span></div>';
@@ -1145,7 +1146,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
         var note=r.note?'<div class="nmnote">✎ '+esc(r.note)+'</div>':'';
         var c=confOf(r),ct=c?' <span class="tag '+c.kind+'" title="'+esc(c.text)+'">'+(c.kind==="adjust"?"要調整":"判断")+'</span>':'';
         Object.keys(r.acks||{}).forEach(function(k){if(!r.acks[k])return;ct+=' <span class="tag acked" title="シフト作成者が了承済み（'+esc(ACK_LABEL[k]||k)+'）">✓了承済（'+esc(ACK_LABEL[k]||k)+'）'+(isAdmin()?'<button class="ackx" data-act="unack" data-id="'+esc(r.id)+'" data-kind="'+k+'" title="了承を取り消す">×</button>':'')+'</span>';});
-        var ops=canEdit(r)?'<button class="linkbtn" style="color:var(--accent)" data-act="req-edit" data-id="'+esc(r.id)+'">編集</button><button class="linkbtn" data-act="del" data-id="'+esc(r.id)+'">削除</button>':'<span class="hint">締切後は作成者のみ</span>';
+        var ops=canEdit(r)?'<button class="linkbtn" style="color:var(--accent)" data-act="req-edit" data-id="'+esc(r.id)+'">編集</button><button class="linkbtn" data-act="del" data-id="'+esc(r.id)+'">削除</button>':(isOwn(r)?'<span class="hint">締切後は作成者のみ</span>':'');
         return '<tr><td class="numeric">'+(d.getMonth()+1)+'/'+d.getDate()+'</td>'+
           '<td>'+(sun?'<span class="tag sunday">日</span>':WD[d.getDay()])+'</td>'+
           '<td><div class="nmcell"><span class="dotm '+tk+'"></span><span>'+esc(r.name)+'</span></div>'+note+'</td>'+
@@ -1264,8 +1265,11 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function dayStateOf(kou,mid,key){return hasYu(kou,mid,key)?"yu":(kou&&kou[mid]&&kou[mid].indexOf(key)>=0)?"kou":"work";}
   function isYukyuDay(m,key){var r=reqOnDate(m,key);return !!(r&&r.leave==="有給")||yuGlobal(m.id,key);}
 
-  function generateShift(periodStart){
+  // team を指定すると、そのチームだけ公休を作り直し、ほかのチームの公休は今の状態（下書き／保存済み）のまま残す
+  function generateShift(periodStart,team){
     var days=periodDays(periodStart),members=sortedMembers(),rmap=reqMap();
+    var curKou=currentKou()||{};
+    function kept(m){return !!team&&m.team!==team;}
     var cfg=Object.assign({ukeMin:2,ukeTarget:3,weekendTarget:3,maxConsec:5,kouTarget:9},state.config);
     var studyKey=studyDateKey(periodStart);
     var st={};
@@ -1273,6 +1277,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     // 作り直しても、シフト上で入れた有給はそのまま残す（有給＝RH として休み扱い）
     var keepYu=(currentKou()||{}).__yu||null,keepKou={__yu:keepYu};
     members.forEach(function(m){st[m.id]=days.map(function(d){var key=ymd(d);if(isCompanyOff(key))return "C";if(isFixedOff(m,d,key))return "F";var r=rmap[m.id]&&rmap[m.id][key];if(r)return r.leave==="公休"?"RK":"RH";if(hasYu(keepKou,m.id,key))return "RH";return "W";});});
+    // 作り直さないチームの人は、今の公休をそのまま入れておく
+    members.forEach(function(m){if(!kept(m))return;(curKou[m.id]||[]).forEach(function(k){for(var i=0;i<days.length;i++){if(ymd(days[i])===k&&st[m.id][i]==="W")st[m.id][i]="K";}});});
     function teamWork(team,i,ex){return members.filter(function(m){return m.team===team&&m.id!==ex&&st[m.id][i]==="W";}).length;}
     function keiNonPartOff(i,ex){return members.filter(function(m){return m.team==="経理"&&!isPart(m)&&m.id!==ex&&st[m.id][i]!=="W";}).length;}
     function nearestOff(mid,i){var arr=st[mid],n=arr.length,dist=n;for(var j=0;j<n;j++){if(arr[j]!=="W"){var dd=Math.abs(j-i);if(dd<dist)dist=dd;}}return dist;}
@@ -1283,7 +1289,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       // 月金土は受注の出勤が目標人数（既定3人）以上残るときだけ公休を入れる
       if(m.team==="受注"&&isPremium(d)&&teamWork("受注",i,m.id)<cfg.weekendTarget)return false;return true;}
     var need={};
-    members.forEach(function(m){if(isPart(m)){need[m.id]=0;return;}var fx=0,rk=0;st[m.id].forEach(function(v){if(v==="F")fx++;else if(v==="RK")rk++;});need[m.id]=Math.max(0,cfg.kouTarget-fx-rk);});
+    members.forEach(function(m){if(isPart(m)||kept(m)){need[m.id]=0;return;}var fx=0,rk=0;st[m.id].forEach(function(v){if(v==="F")fx++;else if(v==="RK")rk++;});need[m.id]=Math.max(0,cfg.kouTarget-fx-rk);});
     // その人の公休（自動・公休希望）がすでに同じ曜日に何日あるか。日曜から遠い水・木に偏らないよう、重なるほど点数を下げる
     function sameWdOff(m,i){var w=days[i].getDay(),c=0;st[m.id].forEach(function(v,j){if((v==="K"||v==="RK")&&days[j].getDay()===w)c++;});return c;}
     function scoreAt(m,i){
@@ -1296,7 +1302,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     }
     // 先に「月〜土で週1日の公休」を確保する（有給は数えない）。期間をまたぐ週は隣の期間のシフトがあるときだけ判定
     members.forEach(function(m){
-      if(isPart(m))return;
+      if(isPart(m)||kept(m))return;
       var groups={};days.forEach(function(d,i){if(d.getDay()===0)return;var k=ymd(weekMonOf(d));(groups[k]=groups[k]||[]).push(i);});
       Object.keys(groups).forEach(function(k){
         var idx=groups[k],has=false,known=true;
@@ -1339,8 +1345,10 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       });
     }
     // パートは固定休と希望休以外は出勤でよいので、連勤の区切りでも公休を入れない（6連勤以上は警告のみ）
-    members.forEach(function(m){if(isPart(m))return;var g2=0;while(g2++<40){var wr=st[m.id].map(function(v){return v==="W"?"W":"O";});var run=firstLongRun(wr,cfg.maxConsec+1);if(!run)break;var placed=-1,fallback=-1;for(var i=run.s;i<=run.e;i++){if(st[m.id][i]==="W"&&(m.team!=="受注"||teamWork("受注",i,m.id)>=cfg.ukeMin)&&!(m.team==="経理"&&!isPart(m)&&keiNonPartOff(i,m.id)>=1)&&!(keiriCore(m)&&edgeKeys.indexOf(ymd(days[i]))>=0)){if(avoidsDay(m,days[i])){if(fallback<0)fallback=i;continue;}placed=i;break;}}if(placed<0)placed=fallback;if(placed<0)break;st[m.id][placed]="K";}});
-    var kou={};members.forEach(function(m){var ds=[];st[m.id].forEach(function(v,i){if(v==="K")ds.push(ymd(days[i]));});if(ds.length)kou[m.id]=ds;});
+    members.forEach(function(m){if(isPart(m)||kept(m))return;var g2=0;while(g2++<40){var wr=st[m.id].map(function(v){return v==="W"?"W":"O";});var run=firstLongRun(wr,cfg.maxConsec+1);if(!run)break;var placed=-1,fallback=-1;for(var i=run.s;i<=run.e;i++){if(st[m.id][i]==="W"&&(m.team!=="受注"||teamWork("受注",i,m.id)>=cfg.ukeMin)&&!(m.team==="経理"&&!isPart(m)&&keiNonPartOff(i,m.id)>=1)&&!(keiriCore(m)&&edgeKeys.indexOf(ymd(days[i]))>=0)){if(avoidsDay(m,days[i])){if(fallback<0)fallback=i;continue;}placed=i;break;}}if(placed<0)placed=fallback;if(placed<0)break;st[m.id][placed]="K";}});
+    var kou={};members.forEach(function(m){
+      if(kept(m)){if(curKou[m.id]&&curKou[m.id].length)kou[m.id]=curKou[m.id].slice();return;}
+      var ds=[];st[m.id].forEach(function(v,i){if(v==="K")ds.push(ymd(days[i]));});if(ds.length)kou[m.id]=ds;});
     if(keepYu&&Object.keys(keepYu).length)kou.__yu=JSON.parse(JSON.stringify(keepYu));
     return kou;
   }
@@ -1435,7 +1443,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var hasMembers=state.members.length>0;
     var badge=draft?'<span class="badge-unsaved">未保存の変更あり</span>':(savedDoc?'<span class="badge-saved">保存済み '+shortTime(savedDoc.at)+'</span>':'');
     var bar='<div class="shiftbar">'+
-      '<button class="btn primary" data-act="shift-gen"'+(hasMembers?'':' disabled')+'>自動作成</button>'+
+      genButtons(hasMembers,kou)+
       (kou?'<button class="btn" data-act="shift-save">保存</button>':'')+(draft?'<button class="btn ghost" data-act="shift-discard">取消</button>':'')+badge+
       '<span class="grow"></span><span class="hint">マスをタップで 勤務 → 公休 → 有給 → 勤務 の順に切替</span></div>';
     if(!periodFullyVisible(state.periodStart))return periodBar()+'<div class="panel"><div class="empty"><div class="big">希望休の公開前です</div>シフト表は受注の希望休が公開されてから表示されます（シフト作成者は右上「あなた」で「シフト作成者」を選ぶと作業できます）。</div></div>';
@@ -1472,7 +1480,20 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     return periodBar()+bar+'<div class="shift-scroll">'+table+'</div>'+legend+warnHtml+summaryTable(g);
   }
 
-  function shiftGenerate(){var doGen=function(){state.shiftDraft=generateShift(state.periodStart);state.shiftDraftKey=periodKey(state.periodStart);render();};if(currentKou())askConfirm("現在のシフトを作り直しますか？（手修正した公休は上書きされます。シフト上で入れた有給はそのまま残ります）",doGen,"作り直す");else doGen();}
+  // 自動作成ボタン：全員／受注だけ／経理だけ
+  function genButtons(enabled,kou){
+    var dis=enabled?'':' disabled';
+    return '<button class="btn primary" data-act="shift-gen"'+dis+'>'+(kou?'シフト再作成（全員）':'シフト自動作成（全員）')+'</button>'+
+      '<button class="btn" data-act="shift-gen" data-team="受注"'+dis+' title="受注チームの公休だけを作り直します（経理はそのまま）">受注だけ作成</button>'+
+      '<button class="btn" data-act="shift-gen" data-team="経理"'+dis+' title="経理チームの公休だけを作り直します（受注はそのまま）">経理だけ作成</button>';
+  }
+  function shiftGenerate(team){
+    var doGen=function(){state.shiftDraft=generateShift(state.periodStart,team||null);state.shiftDraftKey=periodKey(state.periodStart);render();
+      if(team)showToast(team+"チームの公休を作り直しました（"+(team==="受注"?"経理":"受注")+"はそのまま）。「保存」で確定します");};
+    var other=team==="受注"?"経理":"受注";
+    if(currentKou())askConfirm(team?team+"チームの公休を作り直しますか？\n"+other+"チームの公休はそのまま残ります。（"+team+"の手修正した公休は上書きされます。シフト上で入れた有給はそのまま残ります）":"現在のシフトを作り直しますか？（手修正した公休は上書きされます。シフト上で入れた有給はそのまま残ります）",doGen,"作り直す");
+    else doGen();
+  }
   // シフト表のマスをタップ：勤務 → 公休 → 有給 → 勤務 の順に切り替え
   function shiftToggle(mid,dateStr){
     var draft=ensureDraft(),cur=dayStateOf(draft,mid,dateStr);
@@ -1853,7 +1874,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<tr><td>締日の翌日〜希望休の締切まで</td><td><b>通常申請</b></td></tr></table>'+
       '<p>例：11/16〜12/15の期間なら、10/15までに入れた分が事前申請です。重なったときは<b>事前申請が優先</b>されます。</p>'+
       h4(4,"締切と公開")+
-      '<ul><li><b>受注チームの希望休</b>は、締切までは<b>本人とシフト作成者だけ</b>に見えます。ほかの人の希望を気にせず出してください。</li>'+
+      '<ul><li><b>受注チームの希望休</b>は、締切までは<b>受注メンバーどうしでは見えません</b>（見えるのは本人・経理チーム・シフト作成者）。ほかの人の希望を気にせず出してください。</li>'+
       '<li>締切日の翌日0時に全員に公開されます（画面上部に公開日が出ます）。</li>'+
       '<li><b>経理チームの希望休</b>は、いつでも全員に見えます。</li></ul>'+
       h4(5,"修正・削除")+
@@ -1890,7 +1911,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<li><b>締切を設定</b>：期間表示の横の <span class="k">締切</span> を押して日付を入れる（既定は期間開始月の15日）。必要なら <span class="k">勉強会</span> の日も変更。</li>'+
       '<li><b>公開</b>：締切日の翌日0時に自動公開。早めるときは画面上部の <span class="k">今すぐ公開</span>。</li>'+
       '<li><b>重なりの調整</b>：カレンダー下の「調整が必要な希望休」を確認。<span class="tag adj">要調整</span>は本人に別日を確認、<span class="tag judge">判断</span>は作成者が決める。<span class="k">入れ直す</span> から修正できます。</li>'+
-      '<li><b>シフト自動作成</b>：<span class="k">シフト自動作成</span> を押す → 内容を確認・手直し → <span class="k">保存</span>。</li></ol>'+
+      '<li><b>シフト自動作成</b>：<span class="k">シフト自動作成（全員）</span> を押す → 内容を確認・手直し → <span class="k">保存</span>。<br>チームごとに作り直したいときは <span class="k">受注だけ作成</span>／<span class="k">経理だけ作成</span>（もう一方のチームの公休は今の状態のまま残ります）。</li></ol>'+
       '<div class="box warn"><b>保存するまで全員には反映されません。</b>自動作成や手直しは自分の画面だけの下書きです。<span class="k">取消</span> を押すか、保存せずにページを閉じると元に戻ります。</div>'+
       h4(3,"自動作成のルール")+
       '<ul><li>公休は1期間 <b>'+c.kouTarget+'日</b>（定休日の日曜を含む。会社休業日は含まない）</li>'+
@@ -1910,7 +1931,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<tr><td>カレンダーの日付をタップ</td><td>その日の全員を「公休にする／有給にする／勤務に戻す」</td></tr>'+
       '<tr><td>希望休をドラッグ</td><td>希望休そのものを別の日へ移動（すぐ反映）</td></tr></table>'+
       '<p>移動したあとに出る <span class="k">元に戻す</span> で取り消せます。表の一番下の「メンバーごとの合計」で公休・有給・出勤日数を確認できます。</p>'+
-      '<p>シフト上で入れた<b>有給</b>（黄色の「有」）は、公休と同じく <span class="k">保存</span> で確定します。公休の日数には数えず、有給として数えます。<span class="k">シフト再作成</span> をしても消えずに残ります。</p>'+
+      '<p>シフト上で入れた<b>有給</b>（黄色の「有」）は、公休と同じく <span class="k">保存</span> で確定します。公休の日数には数えず、有給として数えます。<span class="k">シフト再作成</span>（全員・チーム別とも）をしても消えずに残ります。</p>'+
       h4(5,"警告と「了承済み」")+
       '<p>シフト表の下に警告が出ます（赤＝ルール違反、黄＝注意）。手直しするとすぐに更新されます。</p>'+
       '<p>月末月初や勉強会の日の希望休など、承知のうえで認める場合は <span class="k">了承済みにする</span> を押すと警告が消えます。一覧の「✓了承済」の×で取り消せます。</p>'+
@@ -2085,7 +2106,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     else if(a==="study-reset"){resetStudy();}
     else if(a==="study-none"){noneStudy();}
     else if(a==="study-close"){closeStudy();}
-    else if(a==="shift-gen"){shiftGenerate();}
+    else if(a==="shift-gen"){shiftGenerate(t.dataset.team||null);}
     else if(a==="shift-save"){shiftSave();}
     else if(a==="shift-cell"){shiftToggle(t.dataset.mid,t.dataset.date);}
     else if(a==="set-close"){closeSettings();}
