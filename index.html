@@ -465,10 +465,14 @@ body.dragging,body.dragging *{cursor:grabbing!important}
 <!-- deadline -->
 <div class="overlay" id="dlOverlay">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dlTitle" style="max-width:360px">
-    <h3 id="dlTitle">この期間の締切</h3>
+    <h3 id="dlTitle">この期間の締切・提出案内日</h3>
     <div class="form">
+      <div class="field"><label for="fAnnounce">提出案内日（「提出期間です」の表示を始める日）</label><input type="date" id="fAnnounce"></div>
+      <p class="hint" id="fAnnounceHint" style="margin-top:-6px"></p>
       <div class="field"><label for="fDeadline">締切日</label><input type="date" id="fDeadline"></div>
-      <p class="hint">未設定の場合は「16日始まりの前日＝15日」が既定です。締切はシフト作成者が期間ごとに変更できます。</p>
+      <p class="hint">締切日の未設定時は「16日始まりの前日＝15日」が既定です。提出案内日の未設定時は前月16日（タイムカード締めの翌日）から表示します。どちらも期間ごとに変更できます。</p>
+      <p class="hint">※事前申請／通常申請の区切り（前月15日まで＝事前）は、提出案内日を変えても変わりません。</p>
+      <div class="note" id="dlNote"></div>
     </div>
     <div class="foot">
       <button class="btn ghost" data-act="dl-reset">既定に戻す</button>
@@ -1003,7 +1007,11 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     return periodBarCore()+deadlineAlert()+ruleBar()+studyAlert();
   }
   // 希望休の提出期間＝期間開始の前月16日（タイムカード締めの翌日）〜締切日。今が提出期間の期間をカレンダー上部に案内する
-  function submitWindow(ps){var from=new Date(ps.getFullYear(),ps.getMonth()-1,16),to=deadlineOf(ps);return {from:from,to:to};}
+  // 提出案内日（表示開始日）：config.announces[periodKey]。未設定なら前月16日
+  function defaultAnnounce(ps){return new Date(ps.getFullYear(),ps.getMonth()-1,16);}
+  function isCustomAnnounce(ps){return !!((state.config.announces||{})[periodKey(ps)]);}
+  function announceOf(ps){var v=(state.config.announces||{})[periodKey(ps)];return v?parseYmd(v):defaultAnnounce(ps);}
+  function submitWindow(ps){return {from:announceOf(ps),to:deadlineOf(ps)};}
   function currentSubmitPeriod(){
     var t=new Date();t.setHours(0,0,0,0);
     for(var k=0;k<3;k++){var ps=new Date(ACTIVE.getFullYear(),ACTIVE.getMonth()+k,16),w=submitWindow(ps);if(t>=w.from&&t<=w.to)return ps;}
@@ -1051,7 +1059,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var isActive=s.getFullYear()===ACTIVE.getFullYear()&&s.getMonth()===ACTIVE.getMonth();
     var left=daysToDeadline(s);
     var cls="chip-deadline"+(past?" past":left===0?" dl-today":left<=DEADLINE_ALERT_DAYS?" dl-soon":custom?" custom":"");
-    var dlBtn='<button class="'+cls+'" data-act="dl-open">締切 '+(dl.getMonth()+1)+'/'+dl.getDate()+(past?'（締切済み）':custom?'':'（既定）')+' <span class="pen">✎</span></button>';
+    var an=announceOf(s);
+    var dlBtn='<button class="'+cls+'" data-act="dl-open">'+(isCustomAnnounce(s)?'案内 '+(an.getMonth()+1)+'/'+an.getDate()+'〜 ':'')+'締切 '+(dl.getMonth()+1)+'/'+dl.getDate()+(past?'（締切済み）':custom?'':'（既定）')+' <span class="pen">✎</span></button>';
     var back=isActive?'':'<button class="btn ghost sm" data-act="today">今のシフトへ</button>';
     return '<div class="periodbar"><div class="period">'+
       '<button class="nav" data-act="prev" aria-label="前の期間">‹</button>'+
@@ -1778,17 +1787,29 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   }
 
   /* ---- deadline modal ---- */
-  function openDeadline(){document.getElementById("fDeadline").value=ymd(deadlineOf(state.periodStart));document.getElementById("dlOverlay").classList.add("on");}
+  function openDeadline(){
+    var s=state.periodStart,def=defaultAnnounce(s);
+    document.getElementById("fDeadline").value=ymd(deadlineOf(s));
+    document.getElementById("fAnnounce").value=ymd(announceOf(s));
+    document.getElementById("fAnnounceHint").textContent="未設定なら "+(def.getMonth()+1)+"/"+def.getDate()+"（前月16日）から表示"+(isCustomAnnounce(s)?"（今は変更済み）":"");
+    document.getElementById("dlNote").classList.remove("on");
+    document.getElementById("dlOverlay").classList.add("on");
+  }
   function closeDeadline(){document.getElementById("dlOverlay").classList.remove("on");}
   async function saveDeadline(){
-    var v=document.getElementById("fDeadline").value;if(!v){closeDeadline();return;}
-    var dl=Object.assign({},state.config.deadlines||{});dl[periodKey(state.periodStart)]=v;
-    var cfg=Object.assign({},state.config,{deadlines:dl});
+    var v=document.getElementById("fDeadline").value,av=document.getElementById("fAnnounce").value,s=state.periodStart,k=periodKey(s),note=document.getElementById("dlNote");
+    if(!v){closeDeadline();return;}
+    if(av&&av>v){note.textContent="提出案内日は締切日より前の日にしてください。";note.classList.add("on");return;}
+    var dl=Object.assign({},state.config.deadlines||{});dl[k]=v;
+    // 提出案内日：既定（前月16日）と同じなら設定を外す
+    var an=Object.assign({},state.config.announces||{});if(!av||av===ymd(defaultAnnounce(s)))delete an[k];else an[k]=av;
+    var cfg=Object.assign({},state.config,{deadlines:dl,announces:an});
     try{await Store.saveConfig(cfg);closeDeadline();}catch(e){alert("保存できませんでした。");}
   }
   async function resetDeadline(){
     var dl=Object.assign({},state.config.deadlines||{});delete dl[periodKey(state.periodStart)];
-    var cfg=Object.assign({},state.config,{deadlines:dl});
+    var an=Object.assign({},state.config.announces||{});delete an[periodKey(state.periodStart)];
+    var cfg=Object.assign({},state.config,{deadlines:dl,announces:an});
     try{await Store.saveConfig(cfg);closeDeadline();}catch(e){alert("保存できませんでした。");}
   }
 
@@ -1938,7 +1959,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       h4(4,"締切と公開")+
       '<ul><li><b>受注チームの希望休</b>は、締切までは<b>受注メンバーどうしでは見えません</b>（見えるのは本人・経理チーム・シフト作成者）。ほかの人の希望を気にせず出してください。</li>'+
       '<li>締切日の翌日0時に全員に公開されます（画面上部に公開日が出ます）。</li>'+
-      '<li><b>提出期間</b>（期間が始まる前月の16日〜締切日）中は、カレンダー上部に「ただいま ○/16〜○/15 の希望休の提出期間です」と、公休を避けたい曜日の設定の案内（<span class="k">自分の設定を開く</span> ボタン付き）が表示され、締切日のマスには「○/16〜 希望休締切」と出ます。</li>'+
+      '<li><b>提出期間</b>（提出案内日〜締切日。通常は期間が始まる前月の16日から）中は、カレンダー上部に「ただいま ○/16〜○/15 の希望休の提出期間です」と、公休を避けたい曜日の設定の案内（<span class="k">自分の設定を開く</span> ボタン付き）が表示され、締切日のマスには「○/16〜 希望休締切」と出ます。</li>'+
       '<li>締切の'+DEADLINE_ALERT_DAYS+'日前からは画面上部に「締切まであと○日」（黄色）、当日は「本日が締切」（赤）と表示されます。</li>'+
       '<li><b>経理チームの希望休</b>は、いつでも全員に見えます。</li></ul>'+
       h4(5,"修正・削除")+
@@ -1977,7 +1998,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<p>右上の <span class="k">あなた</span> で <b>シフト作成者（全員分を表示）</b> を選びます。全員の希望休、<span class="k">履歴</span> タブ、締切前のシフト作成が使えるようになります。</p>'+
       h4(2,"1期間の流れ")+
       '<ol><li><b>15日（タイムカード締日）</b>：部内チャットで次の期間の希望休提出を案内。ここまでの入力が事前申請、以降が通常申請。</li>'+
-      '<li><b>締切を設定</b>：期間表示の横の <span class="k">締切</span> を押して日付を入れる（既定は期間開始月の15日）。必要なら <span class="k">勉強会</span> の日も変更。</li>'+
+      '<li><b>締切を設定</b>：期間表示の横の <span class="k">締切</span> を押して締切日を入れる（既定は期間開始月の15日）。<b>提出案内日</b>（「提出期間です」のお知らせを出し始める日）も同じ画面で設定できます（未設定なら前月16日から。案内が遅れた月だけ変更）。必要なら <span class="k">勉強会</span> の日も変更。</li>'+
       '<li><b>公開</b>：締切日の翌日0時に自動公開。早めるときは画面上部の <span class="k">今すぐ公開</span>。</li>'+
       '<li><b>重なりの調整</b>：カレンダー下の「調整が必要な希望休」を確認。<span class="tag adj">要調整</span>は本人に別日を確認、<span class="tag judge">判断</span>は作成者が決める。<span class="k">入れ直す</span> から修正できます。</li>'+
       '<li><b>シフト自動作成</b>：<span class="k">シフト自動作成（全員）</span> を押す → 内容を確認・手直し → <span class="k">保存</span>。<br>チームごとに作り直したいときは <span class="k">受注だけ作成</span>／<span class="k">経理だけ作成</span>（もう一方のチームの公休は今の状態のまま残ります）。</li></ol>'+
