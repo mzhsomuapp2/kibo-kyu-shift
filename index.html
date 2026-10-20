@@ -89,6 +89,13 @@ header.app{display:flex; align-items:flex-end; justify-content:space-between; ga
 .chip-deadline .pen{opacity:.6}
 .chip-deadline.past{border-color:var(--line-strong); background:var(--surface-2); color:var(--ink-faint)}
 .chip-deadline.custom{border-color:var(--accent); background:var(--accent-weak); color:var(--accent)}
+.chip-deadline.dl-soon{border-color:var(--warn-line); background:var(--warn-bg); color:var(--warn-ink); box-shadow:0 0 0 2px var(--warn-line)}
+.chip-deadline.dl-today{border-color:var(--danger-line); background:var(--danger-bg); color:var(--danger-ink); box-shadow:0 0 0 2px var(--danger-line); animation:pulse 1.4s ease-in-out infinite}
+.calwarn{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.calwarn summary{cursor:pointer;font-size:13px;font-weight:800}
+.calwarn .warnbox,.calwarn .okbox{margin-top:8px}
+.dlalert{font-size:13.5px;padding:10px 14px;border-radius:10px;margin-bottom:12px;background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-line)}
+.dlalert.today{background:var(--danger-bg);color:var(--danger-ink);border-color:var(--danger-line)}
 .pb-actions{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
 .btn{appearance:none; font-family:inherit; font-weight:700; font-size:13.5px; cursor:pointer; border-radius:10px; padding:9px 15px; border:1px solid var(--line); background:var(--surface); color:var(--ink); box-shadow:var(--shadow)}
 .btn:hover{border-color:var(--line-strong)}
@@ -100,26 +107,27 @@ header.app{display:flex; align-items:flex-end; justify-content:space-between; ga
 .btn.danger{color:var(--danger-ink); border-color:var(--danger-line)}
 .cal-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
 .cal{min-width:680px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow)}
-.wk{display:grid; grid-template-columns:repeat(7,1fr); background:var(--surface-2); border-bottom:1px solid var(--line)}
-.wk div{padding:9px 0; text-align:center; font-size:12px; font-weight:700; color:var(--ink-soft)}
-.wk div:first-child{color:var(--danger-ink)}
-.wk div:last-child{color:var(--uke-dot)}
+/* カレンダー専用（シフト表の td.cell / td.wk に効かないよう .cal / .grid で限定） */
+.cal .wk{display:grid; grid-template-columns:repeat(7,1fr); background:var(--surface-2); border-bottom:1px solid var(--line)}
+.cal .wk div{padding:9px 0; text-align:center; font-size:12px; font-weight:700; color:var(--ink-soft)}
+.cal .wk div:first-child{color:var(--danger-ink)}
+.cal .wk div:last-child{color:var(--uke-dot)}
 .grid{display:grid; grid-template-columns:repeat(7,1fr)}
-.cell{min-height:110px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:6px 6px 8px; position:relative; cursor:pointer; background:var(--surface)}
-.cell:nth-child(7n){border-right:0}
-.cell.blank{background:var(--surface-2); cursor:default}
-.cell.sun{background:repeating-linear-gradient(135deg,var(--sun-a),var(--sun-a) 7px,var(--sun-b) 7px,var(--sun-b) 14px); cursor:default}
-.cell.warn{background:var(--warn-bg)}
-.cell.danger{background:var(--danger-bg)}
-.cell:not(.blank):not(.sun):hover{outline:2px solid var(--accent); outline-offset:-2px; z-index:1}
-.cell .dnum{font-size:14px; font-weight:800; color:var(--ink)}
-.cell.sun .dnum{color:var(--sun-ink)}
-.cell .mtag{font-size:10px; font-weight:700; color:var(--accent); margin-left:3px}
-.cell .holname{font-size:9.5px; font-weight:700; color:var(--hol); margin-top:1px; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.cell .today-dot{position:absolute; top:8px; right:8px; width:7px; height:7px; border-radius:50%; background:var(--accent)}
-.cell .sun-label{font-size:11px; font-weight:700; color:var(--sun-ink); margin-top:12px; text-align:center}
+.grid .cell{min-height:110px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:6px 6px 8px; position:relative; cursor:pointer; background:var(--surface)}
+.grid .cell:nth-child(7n){border-right:0}
+.grid .cell.blank{background:var(--surface-2); cursor:default}
+.grid .cell.sun{background:repeating-linear-gradient(135deg,var(--sun-a),var(--sun-a) 7px,var(--sun-b) 7px,var(--sun-b) 14px); cursor:default}
+.grid .cell.warn{background:var(--warn-bg)}
+.grid .cell.danger{background:var(--danger-bg)}
+.grid .cell:not(.blank):not(.sun):hover{outline:2px solid var(--accent); outline-offset:-2px; z-index:1}
+.grid .cell .dnum{font-size:14px; font-weight:800; color:var(--ink)}
+.grid .cell.sun .dnum{color:var(--sun-ink)}
+.grid .cell .mtag{font-size:10px; font-weight:700; color:var(--accent); margin-left:3px}
+.grid .cell .holname{font-size:9.5px; font-weight:700; color:var(--hol); margin-top:1px; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.grid .cell .today-dot{position:absolute; top:8px; right:8px; width:7px; height:7px; border-radius:50%; background:var(--accent)}
+.grid .cell .sun-label{font-size:11px; font-weight:700; color:var(--sun-ink); margin-top:12px; text-align:center}
 .cnt{position:absolute; top:6px; right:8px; font-size:11px; font-weight:800; padding:1px 7px; border-radius:999px; background:var(--warn-line); color:#fff}
-.cell.danger .cnt{background:var(--danger-line)}
+.grid .cell.danger .cnt{background:var(--danger-line)}
 .chips{margin-top:5px; display:flex; flex-direction:column; gap:3px}
 .chip{display:flex; align-items:center; gap:4px; font-size:11.5px; font-weight:600; line-height:1.35; padding:2px 6px; border-radius:6px; max-width:100%}
 .chip .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
@@ -219,25 +227,25 @@ tbody tr:hover{background:var(--surface-2)}
 .badge-unsaved{font-size:11.5px;font-weight:700;color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);padding:4px 9px;border-radius:999px}
 .badge-saved{font-size:11.5px;font-weight:700;color:var(--accent);background:var(--accent-weak);padding:4px 9px;border-radius:999px}
 .shift-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
-.shiftgrid{border-collapse:separate;border-spacing:0;min-width:100%;font-size:12px;background:var(--surface)}
+.shiftgrid{border-collapse:separate;border-spacing:0;font-size:12px;background:var(--surface)}
 .shiftgrid th,.shiftgrid td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:center}
-.shiftgrid thead th{background:var(--surface-2);font-weight:700;padding:5px 3px;white-space:nowrap;min-width:30px;color:var(--ink-soft);line-height:1.25}
-.shiftgrid thead th .d{font-size:13px;font-weight:800;color:var(--ink)}
+.shiftgrid thead th{background:var(--surface-2);font-weight:700;padding:4px 1px;white-space:nowrap;width:26px;min-width:26px;max-width:26px;color:var(--ink-soft);line-height:1.2;font-size:11px}
+.shiftgrid thead th .d{font-size:12.5px;font-weight:800;color:var(--ink)}
 .shiftgrid thead th.sun .d{color:var(--danger-ink)} .shiftgrid thead th.sat .d{color:var(--uke-dot)}
-.shiftgrid thead th .hn{font-size:8.5px;color:var(--hol);display:block;overflow:hidden;text-overflow:ellipsis;max-width:34px}
+.shiftgrid thead th .hn{font-size:8px;color:var(--hol);display:block;overflow:hidden;text-overflow:clip;max-width:26px}
 .shiftgrid thead th.prem{background:var(--warn-bg)}
 .shiftgrid thead th.prem .d{color:var(--warn-ink)}
-.shiftgrid td.koucol,.shiftgrid th.koucol{position:sticky;right:0;background:var(--surface-2);font-weight:800;min-width:46px;z-index:2;border-left:2px solid var(--line-strong)}
+.shiftgrid td.koucol,.shiftgrid th.koucol{position:sticky;right:0;background:var(--surface-2);font-weight:800;width:42px;min-width:42px;max-width:none;padding:2px 3px;z-index:2;border-left:2px solid var(--line-strong)}
 .shiftgrid thead th.koucol{z-index:3}
 .shiftgrid td.koucol.bad{background:var(--danger-bg);color:var(--danger-ink)}
 .shiftgrid td.koucol.warn{background:var(--warn-bg);color:var(--warn-ink)}
 .shiftgrid td.koucol.ok{color:var(--accent)}
 .shiftgrid tbody td.cell.st{box-shadow:inset 2px 0 0 var(--accent),inset -2px 0 0 var(--accent)}
-.shiftgrid td.name,.shiftgrid th.name{position:sticky;left:0;text-align:left;padding:6px 10px;min-width:92px;z-index:2;font-weight:700;background:var(--surface)}
+.shiftgrid td.name,.shiftgrid th.name{position:sticky;left:0;text-align:left;padding:3px 8px;width:auto;min-width:64px;max-width:none;white-space:nowrap;z-index:2;font-weight:700;background:var(--surface)}
 .shiftgrid thead th.name{z-index:3;background:var(--surface-2)}
 .shiftgrid td.name .tm{font-size:10px;font-weight:700;color:var(--ink-faint)}
 .shiftgrid td.name .dotm{margin-right:5px}
-.shiftgrid tbody td.cell{height:30px;cursor:pointer;font-weight:800;font-size:11px}
+.shiftgrid tbody td.cell{height:26px;width:26px;min-width:26px;max-width:26px;padding:0;cursor:pointer;font-weight:800;font-size:11px}
 .shiftgrid tbody td.cell.wk{background:var(--surface);color:transparent}
 .shiftgrid tbody td.cell.wk:hover{background:var(--accent-weak)}
 .shiftgrid tbody td.cell.fx{background:repeating-linear-gradient(135deg,var(--sun-a),var(--sun-a) 5px,var(--sun-b) 5px,var(--sun-b) 10px);color:var(--sun-ink);cursor:default}
@@ -252,7 +260,7 @@ tbody tr:hover{background:var(--surface-2)}
 .dayrow .btn[data-to]:hover{filter:brightness(.97)}
 .chip.assigned.yu{background:var(--warn-bg);color:var(--warn-ink);border-color:var(--warn-line)}
 .shiftgrid tbody tr.grp td{background:var(--surface-2);text-align:left;padding:4px 10px;font-size:10.5px;font-weight:800;color:var(--ink-soft);position:sticky;left:0}
-.shiftgrid tfoot td{background:var(--surface-2);font-weight:800;font-size:11px;color:var(--ink-soft);padding:4px 2px}
+.shiftgrid tfoot td{background:var(--surface-2);font-weight:800;font-size:11px;color:var(--ink-soft);padding:3px 1px}
 .shiftgrid tfoot td.name{color:var(--ink)}
 .shiftgrid tfoot td.bad{background:var(--danger-bg);color:var(--danger-ink)}
 .shiftgrid tfoot td.warn{background:var(--warn-bg);color:var(--warn-ink)}
@@ -987,7 +995,16 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   }
 
   function periodBar(){
-    return periodBarCore()+ruleBar()+studyAlert();
+    return periodBarCore()+deadlineAlert()+ruleBar()+studyAlert();
+  }
+  // 締切が近いときの強調：3日前〜前日は黄色、当日は赤（締切日の23:59まで入力可）
+  var DEADLINE_ALERT_DAYS=3;
+  function daysToDeadline(s){var dl=deadlineOf(s),t=new Date();t.setHours(0,0,0,0);return Math.round((new Date(dl.getFullYear(),dl.getMonth(),dl.getDate())-t)/864e5);}
+  function deadlineAlert(){
+    var s=state.periodStart,n=daysToDeadline(s);if(n<0||n>DEADLINE_ALERT_DAYS)return "";
+    var dl=deadlineOf(s),md=(dl.getMonth()+1)+"/"+dl.getDate()+"("+WD[dl.getDay()]+")";
+    if(n===0)return '<div class="dlalert today"><b>本日（'+md+'）が希望休の締切です（23:59まで）。</b>まだの方は今日中に入力してください。</div>';
+    return '<div class="dlalert"><b>希望休の締切まであと'+n+'日（'+md+'まで）。</b>まだの方は早めに入力してください。</div>';
   }
   // 勉強会予定日に希望休（公休・有給）が出ていたら日程調整を促す。見える範囲の希望休だけで判定（非公開の受注分は本人・作成者のみ）
   function studyAlert(){
@@ -1009,7 +1026,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var s=state.periodStart,dl=deadlineOf(s),now=new Date();now.setHours(0,0,0,0);
     var past=dl<now,custom=isCustomDeadline(s);
     var isActive=s.getFullYear()===ACTIVE.getFullYear()&&s.getMonth()===ACTIVE.getMonth();
-    var cls="chip-deadline"+(past?" past":custom?" custom":"");
+    var left=daysToDeadline(s);
+    var cls="chip-deadline"+(past?" past":left===0?" dl-today":left<=DEADLINE_ALERT_DAYS?" dl-soon":custom?" custom":"");
     var dlBtn='<button class="'+cls+'" data-act="dl-open">締切 '+(dl.getMonth()+1)+'/'+dl.getDate()+(past?'（締切済み）':custom?'':'（既定）')+' <span class="pen">✎</span></button>';
     var back=isActive?'':'<button class="btn ghost sm" data-act="today">今のシフトへ</button>';
     return '<div class="periodbar"><div class="period">'+
@@ -1046,6 +1064,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var draft=(state.shiftDraftKey===pKey)?state.shiftDraft:null;
     var savedDoc=state.shifts[pKey];
     var kou=full?(draft||(savedDoc&&savedDoc.kou)||null):null;
+    var gGrid=kou?computeGrid(s,kou):null;
     var cfg=Object.assign({ukeMin:2,ukeTarget:3,weekendTarget:3},state.config);
     var studyKey=studyDateKey(s),edgeKs=keiriDayKeys(s);
     var lead=days[0].getDay(),cells="";
@@ -1100,7 +1119,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<span><i class="sw sun"></i>定休日（日曜）・会社休業日</span><span>点線＝個人の固定休</span>'+
       '<span>希望休・公はドラッグで別の日へ移動（スマホは長押ししてから）</span>'+
       (newRules(s)?'<span><span class="tag adj">要調整</span>順位・事前により調整が必要</span><span><span class="tag judge">判断</span>作成者が判断</span>':'')+'</div>';
-    return periodBar()+shiftCtrl+'<div class="cal-scroll"><div class="cal"><div class="wk">'+WD.map(function(w){return '<div>'+w+'</div>';}).join("")+'</div><div class="grid">'+cells+'</div></div></div>'+legend+conflictPanel(s,cmap)+(kou?summaryTable(computeGrid(s,kou)):'');
+    return periodBar()+shiftCtrl+'<div class="cal-scroll"><div class="cal"><div class="wk">'+WD.map(function(w){return '<div>'+w+'</div>';}).join("")+'</div><div class="grid">'+cells+'</div></div></div>'+(gGrid?calWarnHtml(gGrid):'')+legend+conflictPanel(s,cmap)+(gGrid?summaryTable(gGrid):'');
   }
   // メンバーごとの合計（公休＝日曜・固定休・公休希望・自動公休、有給、出勤）。シフトがあるときだけ表示
   function summaryTable(g){
@@ -1480,12 +1499,20 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var footK='<tr><td class="name">経理 出勤</td>'+g.counts.map(function(c){if(c.isSun)return '<td>—</td>';var cls=c.npOff>=2?"bad":"ok";return '<td class="'+cls+'">'+c.kei+'</td>';}).join("")+'<td class="koucol"></td></tr>';
     var table='<table class="shiftgrid"><thead>'+head+'</thead><tbody>'+bodyRows+'</tbody><tfoot>'+footU+footK+'</tfoot></table>';
     var legend='<div class="shiftlegend"><span><b style="color:var(--accent)">公</b> 公休</span><span><b>希</b>/<b>有</b> 希望休(公休/有休)</span><span><b style="color:var(--warn-ink);background:var(--warn-bg);padding:0 4px;border-radius:4px">有</b> シフトで入れた有給</span><span><b style="color:var(--sun-ink)">定</b> 定休日（日曜）</span><span><b style="color:var(--sun-ink)">固</b> 固定休（個人）</span><span><b style="color:var(--sun-ink)">休</b> 会社休業日（公休に数えない）</span><span>空欄=勤務</span><span><b style="color:var(--warn-ink)">✎</b> 勤務メモあり（出勤）</span><span>「公」「希」「有」はドラッグで別の日へ移動（スマホは長押ししてから）</span><span>公休列=公休日数/目標'+cfg.kouTarget+'（有休は別枠）</span><span>連続勤務上限'+cfg.maxConsec+'日</span></div>';
-    var warnHtml;
-    if(g.warnings.length===0)warnHtml='<div class="okbox">✓ 条件をすべて満たしています</div>';
-    else warnHtml='<div class="warnbox">'+g.warnings.map(function(w){
+    return periodBar()+bar+'<div class="shift-scroll">'+table+'</div>'+legend+warnBoxHtml(g)+summaryTable(g);
+  }
+  // シフトの警告一覧（シフトタブとカレンダーで共通）
+  function warnBoxHtml(g){
+    if(g.warnings.length===0)return '<div class="okbox">✓ 条件をすべて満たしています</div>';
+    return '<div class="warnbox">'+g.warnings.map(function(w){
       var btns=isAdmin()?(w.acks||[]).map(function(a){return '<button class="linkbtn" style="color:var(--accent);white-space:nowrap" data-act="ack" data-id="'+esc(a.r.id)+'" data-kind="'+a.kind+'">'+((w.acks.length>1)?esc(a.r.name)+'を':'')+'了承済みにする</button>';}).join(""):'';
       return '<div class="warnitem'+(w.err?' err':'')+'" style="align-items:center"><span class="wi">'+(w.err?'!':'△')+'</span><span>'+esc(w.text)+'</span>'+(btns?'<span style="flex:1"></span>'+btns:'')+'</div>';}).join("")+'</div>';
-    return periodBar()+bar+'<div class="shift-scroll">'+table+'</div>'+legend+warnHtml+summaryTable(g);
+  }
+  // カレンダー用：見出し付き・開閉できる警告一覧（シフトがあるときだけ）
+  function calWarnHtml(g){
+    var e=g.warnings.filter(function(w){return w.err;}).length,n=g.warnings.length-e;
+    var head=g.warnings.length?'シフトの警告 '+g.warnings.length+'件（<span style="color:var(--danger-ink)">赤 '+e+'</span>・<span style="color:var(--warn-ink)">黄 '+n+'</span>）':'シフトの警告 なし';
+    return '<details class="calwarn"'+(state.calWarnClosed?'':' open')+'><summary>'+head+'</summary>'+warnBoxHtml(g)+'</details>';
   }
 
   // 自動作成ボタン：全員／受注だけ／経理だけ
@@ -1884,6 +1911,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       h4(4,"締切と公開")+
       '<ul><li><b>受注チームの希望休</b>は、締切までは<b>受注メンバーどうしでは見えません</b>（見えるのは本人・経理チーム・シフト作成者）。ほかの人の希望を気にせず出してください。</li>'+
       '<li>締切日の翌日0時に全員に公開されます（画面上部に公開日が出ます）。</li>'+
+      '<li>締切の'+DEADLINE_ALERT_DAYS+'日前からは画面上部に「締切まであと○日」（黄色）、当日は「本日が締切」（赤）と表示されます。</li>'+
       '<li><b>経理チームの希望休</b>は、いつでも全員に見えます。</li></ul>'+
       h4(5,"修正・削除")+
       '<ul><li>締切までは、自分の希望休を <span class="k">一覧</span> やカレンダーから編集・削除できます。一覧は<b>日付の新しい順</b>に並んでいます（チームや区分で絞り込み可）。</li>'+
@@ -1941,7 +1969,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<p>移動したあとに出る <span class="k">元に戻す</span> で取り消せます。表の一番下の「メンバーごとの合計」で公休・有給・出勤日数を確認できます。</p>'+
       '<p>シフト上で入れた<b>有給</b>（黄色の「有」）は、公休と同じく <span class="k">保存</span> で確定します。公休の日数には数えず、有給として数えます。<span class="k">シフト再作成</span>（全員・チーム別とも）をしても消えずに残ります。</p>'+
       h4(5,"警告と「了承済み」")+
-      '<p>シフト表の下に警告が出ます（赤＝ルール違反、黄＝注意）。手直しするとすぐに更新されます。</p>'+
+      '<p>警告は<b>シフトタブの表の下</b>と<b>カレンダーの下</b>（「シフトの警告 ○件」、▶で開閉）に出ます（赤＝ルール違反、黄＝注意）。<b>保存を押す前（下書きの段階）から</b>、自動作成や手直しをするたびにすぐ更新されます。保存前に警告を確認してから <span class="k">保存</span> してください。</p>'+
+      '<p>希望休の <span class="tag adj">要調整</span>／<span class="tag judge">判断</span> は、希望休が入力された時点で判定されます（希望休は入力するとすぐ保存されます）。作成者の表示ではいつでも、メンバーには公開後に表示されます。</p>'+
       '<p>経理出勤日や勉強会の日の希望休など、承知のうえで認める場合は <span class="k">了承済みにする</span> を押すと警告が消えます。一覧の「✓了承済」の×で取り消せます。</p>'+
       h4(6,"設定・メンバー")+
       '<ul><li><span class="k">設定</span>：被り警告の人数、受注の人数、連勤の上限、公休日数、日曜の扱い、<b>会社休業日</b>の追加・削除、<b>受注の優先順位（ローテーション）</b>の編集</li>'+
@@ -2136,6 +2165,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   document.getElementById("memberBody").addEventListener("change",function(ev){if(ev.target.classList.contains("mwd")){ev.target.closest("label").classList.toggle("on",ev.target.checked);}});
   document.addEventListener("input",function(ev){if(ev.target.id==="listSearch"){state.listQuery=ev.target.value;document.getElementById("main").innerHTML=viewList();var v=document.getElementById("listSearch");v.focus();v.setSelectionRange(v.value.length,v.value.length);}});
   document.addEventListener("change",function(ev){if(ev.target.id==="listFilter"){state.listFilter=ev.target.value;render();}else if(ev.target.id==="listAll"){state.listAll=ev.target.checked;render();}else if(ev.target.id==="viewerSel"){saveViewer(ev.target.value);closeDay();render();}else if(ev.target.id==="fRotStart"){renderRotEditor(ev.target.value);}else if(ev.target.id==="fMember"){checkAddNote();}else if(ev.target.id==="fImport"){dataImportFile(ev.target.files&&ev.target.files[0]);}else if(ev.target.classList&&ev.target.classList.contains("rotsel")){rotPreview();}});
+  // カレンダーの警告一覧の開閉を、画面を描き直しても保つ
+  document.addEventListener("toggle",function(ev){if(ev.target.classList&&ev.target.classList.contains("calwarn"))state.calWarnClosed=!ev.target.open;},true);
   document.getElementById("segHelp").addEventListener("click",function(ev){var b=ev.target.closest("button");if(b)setHelpTab(b.dataset.v);});
   ["addOverlay","memberOverlay","dlOverlay","setOverlay","dayOverlay","confirmOverlay","studyOverlay","ghOverlay","helpOverlay"].forEach(function(id){document.getElementById(id).addEventListener("click",function(ev){if(ev.target===this)this.classList.remove("on");});});
   document.addEventListener("keydown",function(ev){if(ev.key==="Escape"){closeAdd();closeMembers();closeDeadline();closeSettings();closeDay();closeConfirm();closeStudy();closeGh();closeHelp();}});
