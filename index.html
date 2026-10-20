@@ -628,7 +628,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function isOff(r){return !!r&&r.leave!==MEMO;}
   function offRequests(){return state.requests.filter(isOff);}
   // 了承済み（シフト作成者が承知のうえで認めた希望休）。r.acks={edge:true,study:true}。日付を変えると外す
-  var ACK_LABEL={edge:"月末月初",study:"勉強会"};
+  var ACK_LABEL={edge:"経理出勤日",study:"勉強会"};
   function isAcked(r,kind){return !!(r&&r.acks&&r.acks[kind]);}
   function setAck(id,kind,on){
     var r=reqById(id);if(!r||!isAdmin())return;
@@ -1047,7 +1047,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var savedDoc=state.shifts[pKey];
     var kou=full?(draft||(savedDoc&&savedDoc.kou)||null):null;
     var cfg=Object.assign({ukeMin:2,ukeTarget:3,weekendTarget:3},state.config);
-    var studyKey=studyDateKey(s),edgeKs=monthEdgeKeys(s);
+    var studyKey=studyDateKey(s),edgeKs=keiriDayKeys(s);
     var lead=days[0].getDay(),cells="";
     for(var i=0;i<lead;i++)cells+='<div class="cell blank"></div>';
     days.forEach(function(d){
@@ -1059,7 +1059,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       var todayDot=sameDay(d,today)?'<span class="today-dot"></span>':'';
       var holHtml=(hol&&!isSun)?'<div class="holname" title="'+esc(hol)+'">'+esc(hol)+'</div>':'';
       var studyHtml=(studyKey&&key===studyKey&&!isSun)?'<div class="holname" style="color:var(--accent)" title="勉強会">勉強会</div>':'';
-      if(!isSun&&edgeKs.indexOf(key)>=0)studyHtml+='<div class="holname" style="color:var(--kei-ink)" title="月末月初のため経理（常勤）は出勤">経理出勤日</div>';
+      if(!isSun&&edgeKs.indexOf(key)>=0)studyHtml+='<div class="holname" style="color:var(--kei-ink)" title="'+esc(keiriDayWhy(key))+'のため経理（常勤）は出勤">経理出勤日</div>';
       var inner;
       if(isSun){inner='<div class="dnum">'+d.getDate()+mtag+'</div>'+todayDot+'<div class="sun-label">'+(coOff?'会社休業日':'定休日')+'</div>';}
       else{
@@ -1231,14 +1231,22 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function isPremium(d){var w=d.getDay();return w===1||w===5||w===6;}
   function nthWeekday(y,mon,wd,n){var d=new Date(y,mon,1),c=0;while(d.getMonth()===mon){if(d.getDay()===wd){c++;if(c===n)return new Date(d);}d.setDate(d.getDate()+1);}return null;}
   function studyDefault(periodStart){var end=periodEnd(periodStart);var t=nthWeekday(periodStart.getFullYear(),periodStart.getMonth(),2,3);if(t&&t>=periodStart&&t<=end)return t;var t2=nthWeekday(end.getFullYear(),end.getMonth(),2,3);if(t2&&t2>=periodStart&&t2<=end)return t2;return t;}
-  // 月末月初＝月末の最終営業日と月初の初営業日（日曜・会社休業日を除く）。この2日は経理の常勤2人とも出勤
+  // 経理出勤日（経理の常勤2人とも出勤。日曜・会社休業日は除いて数える）
+  //   月末＝月末の最終営業日、月初＝月初の初営業日、タイムカード締め＝毎月16日（休みなら次の営業日）
+  function closedDay(d){return d.getDay()===0||isCompanyOff(ymd(d));}
   function monthEdgeKeys(ps){
-    function closed(d){return d.getDay()===0||isCompanyOff(ymd(d));}
-    var last=new Date(ps.getFullYear(),ps.getMonth()+1,0);while(closed(last))last.setDate(last.getDate()-1);
-    var first=new Date(ps.getFullYear(),ps.getMonth()+1,1);while(closed(first))first.setDate(first.getDate()+1);
+    var last=new Date(ps.getFullYear(),ps.getMonth()+1,0);while(closedDay(last))last.setDate(last.getDate()-1);
+    var first=new Date(ps.getFullYear(),ps.getMonth()+1,1);while(closedDay(first))first.setDate(first.getDate()+1);
     return [ymd(last),ymd(first)];
   }
-  function isMonthEdge(key){return monthEdgeKeys(periodStartForDate(parseYmd(key))).indexOf(key)>=0;}
+  function keiriDayList(ps){
+    var e=monthEdgeKeys(ps),tc=new Date(ps.getFullYear(),ps.getMonth(),16);while(closedDay(tc))tc.setDate(tc.getDate()+1);
+    var out=[{key:ymd(tc),why:"タイムカード締め"},{key:e[0],why:"月末"},{key:e[1],why:"月初"}],seen={};
+    return out.filter(function(x){if(seen[x.key])return false;seen[x.key]=1;return true;});
+  }
+  function keiriDayKeys(ps){return keiriDayList(ps).map(function(x){return x.key;});}
+  function keiriDayWhy(key){var h=keiriDayList(periodStartForDate(parseYmd(key))).filter(function(x){return x.key===key;})[0];return h?h.why:"";}
+  function isKeiriDay(key){return !!keiriDayWhy(key);}
   function keiriCore(m){return !!m&&m.team==="経理"&&!isPart(m);}
   function studyDateKey(periodStart){var v=(state.config.studyDates||{})[periodKey(periodStart)];if(v==="none")return null;if(v)return v;var dd=studyDefault(periodStart);return dd?ymd(dd):null;}
   function periodStartForDate(d){var y=d.getFullYear(),m=d.getMonth();if(d.getDate()<16)m-=1;return new Date(y,m,16);}
@@ -1283,7 +1291,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     function keiNonPartOff(i,ex){return members.filter(function(m){return m.team==="経理"&&!isPart(m)&&m.id!==ex&&st[m.id][i]!=="W";}).length;}
     function nearestOff(mid,i){var arr=st[mid],n=arr.length,dist=n;for(var j=0;j<n;j++){if(arr[j]!=="W"){var dd=Math.abs(j-i);if(dd<dist)dist=dd;}}return dist;}
     function runLenAt(mid,i){if(st[mid][i]!=="W")return 0;var s=i,e=i;while(s>0&&st[mid][s-1]==="W")s--;while(e<st[mid].length-1&&st[mid][e+1]==="W")e++;return e-s+1;}
-    var edgeKeys=monthEdgeKeys(periodStart);
+    var edgeKeys=keiriDayKeys(periodStart);
     function eligible(m,i){if(st[m.id][i]!=="W")return false;var d=days[i];if(d.getDay()===0)return false;if(studyKey&&ymd(d)===studyKey)return false;
       if(keiriCore(m)&&edgeKeys.indexOf(ymd(d))>=0)return false;if(m.team==="受注"&&teamWork("受注",i,m.id)<cfg.ukeMin)return false;
       // 月金土は受注の出勤が目標人数（既定3人）以上残るときだけ公休を入れる
@@ -1391,18 +1399,18 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       if(ed.pre&&first&&ed.pre+first>=cfg.maxConsec+1)warnings.push({err:true,text:m.name+"さんが前の期間から続けて"+(ed.pre+first)+"連勤になっています（期間をまたぐ連勤）"});
       if(ed.post&&last&&last+ed.post>=cfg.maxConsec+1)warnings.push({err:true,text:m.name+"さんが次の期間にかけて"+(last+ed.post)+"連勤になっています（期間をまたぐ連勤）"});
     });
-    var edgeKs=monthEdgeKeys(periodStart);
+    var edgeKs=keiriDayKeys(periodStart);
     days.forEach(function(d,i){var c=counts[i];var md=(d.getMonth()+1)+"/"+d.getDate()+"("+WD[d.getDay()]+")";
       if(!c.isSun){
         if(c.uke<cfg.ukeMin)warnings.push({err:true,text:md+" 受注が"+c.uke+"人（最低"+cfg.ukeMin+"人）"});
         else if(isPremium(d)&&c.uke<cfg.weekendTarget)warnings.push({err:false,text:md+" 受注が"+c.uke+"人（月金土は"+cfg.weekendTarget+"人が目標）"});
         if(c.npOff>=2)warnings.push({err:false,text:md+" 経理常勤"+(npNames.length?"（"+npNames.join("・")+"）":"")+"が同時に休み"});
       }
-      // 月末月初：経理常勤の休み（了承済みの希望休は除く）。希望休なら了承ボタンを付ける
+      // 経理出勤日（月末・月初・タイムカード締め）：経理常勤の休み（了承済みの希望休は除く）。希望休なら了承ボタンを付ける
       if(edgeKs.indexOf(ymd(d))>=0)members.forEach(function(m){
         if(!keiriCore(m))return;var cl=rowOf(m.id).cells[i];if(cl.t==="wk")return;
         if(cl.t==="rq"&&isAcked(cl.req,"edge"))return;
-        warnings.push({err:true,text:md+" は月末月初のため経理出勤日です："+m.name+"さんが"+(cl.t==="rq"?cl.leave+"の希望休":cl.t==="ko"?"公休":cl.t==="yu"?"有給":"休み"),acks:cl.t==="rq"?[{r:cl.req,kind:"edge"}]:[]});
+        warnings.push({err:true,text:md+" は"+keiriDayWhy(ymd(d))+"のため経理出勤日です："+m.name+"さんが"+(cl.t==="rq"?cl.leave+"の希望休":cl.t==="ko"?"公休":cl.t==="yu"?"有給":"休み"),acks:cl.t==="rq"?[{r:cl.req,kind:"edge"}]:[]});
       });
       if(c.study){
         var off=members.filter(function(m){var cl=rowOf(m.id).cells[i];return cl.t!=="wk"&&!(cl.t==="rq"&&isAcked(cl.req,"study"));});
@@ -1622,8 +1630,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     if(v&&state.config.sundayFixed&&parseYmd(v).getDay()===0){note.textContent="この日は日曜（定休日）のため全員休みです（申請不要）。";note.classList.add("on");return true;}
     if(v&&isCompanyOff(v)){note.textContent="この日は会社休業日のため全員休みです（申請不要）。";note.classList.add("on");return true;}
     if(v&&state.addLeave!==MEMO&&!isAdmin()&&newRules(periodStartForDate(parseYmd(v)))&&isPublished(periodStartForDate(parseYmd(v)))){note.textContent="この期間は締切を過ぎています。追加・修正はシフト作成者に依頼してください。";note.classList.add("on");return true;}
-    // 経理の常勤は月末月初が出勤日。登録はできるが注意を出す
-    if(v&&state.addLeave!==MEMO&&keiriCore(memberById(document.getElementById("fMember").value))&&isMonthEdge(v)){note.textContent="この日は月末月初のため、経理は出勤日です。休みが必要な場合はシフト作成者と相談してください（登録はできます）。";note.classList.add("on");return false;}
+    // 経理の常勤は経理出勤日（月末・月初・タイムカード締め）に出勤。登録はできるが注意を出す
+    if(v&&state.addLeave!==MEMO&&keiriCore(memberById(document.getElementById("fMember").value))&&isKeiriDay(v)){note.textContent="この日は"+keiriDayWhy(v)+"のため、経理は出勤日です。休みが必要な場合はシフト作成者と相談してください（登録はできます）。";note.classList.add("on");return false;}
     note.classList.remove("on");return false;
   }
   async function saveAdd(){
@@ -1889,7 +1897,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<p>公開後、自分の希望休に <span class="tag adj">要調整</span> が付いたら、シフト作成者と別の日を相談してください。</p>'+
       h4(7,"気をつけたい日")+
       '<ul><li><b>勉強会の日</b>（基本は第3火曜）：希望休を入れると「勉強会の日程を調整してください」と表示されます。</li>'+
-      '<li><b>月末月初</b>（月末の最終営業日・月初の初営業日）：経理の常勤（'+helpKeiri()+'）は出勤日です。入力すると注意が出ます（登録はできます）。</li></ul>'+
+      '<li><b>経理出勤日</b>（月末の最終営業日・月初の初営業日・毎月16日のタイムカード締め）：経理の常勤（'+helpKeiri()+'）は出勤日です。カレンダーに「経理出勤日」と表示され、入力すると注意が出ます（登録はできます）。</li></ul>'+
       h4(8,"パートの方：勤務メモ")+
       '<p>区分で <span class="k">勤務メモ（出勤）</span> を選ぶと、出勤のまま「15時退勤」などのメモを残せます。休みにはなりません。締切後も本人が修正できます。</p>'+
       h4(9,"画面の見方")+
@@ -1919,7 +1927,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<li>連続勤務は <b>'+c.maxConsec+'日まで</b>（'+(c.maxConsec+1)+'連勤にしない。期間をまたぐ連勤は警告で表示）</li>'+
       '<li>受注は1日 <b>'+c.ukeMin+'人以上</b>出勤、月・金・土は <b>'+c.weekendTarget+'人以上</b></li>'+
       '<li>経理の常勤（'+helpKeiri()+'）は同じ日に休ませない（有給も含む）</li>'+
-      '<li>月末月初（最終営業日・初営業日）は経理の2人とも出勤</li>'+
+      '<li>経理出勤日（月末の最終営業日・月初の初営業日・毎月16日のタイムカード締め。休みの日に当たるときは前後の営業日）は経理の2人とも出勤</li>'+
       '<li>勉強会の日には公休を入れない</li>'+
       '<li>パートは固定休と希望休以外は出勤（自動で公休を入れない）</li>'+
       '<li>メンバーごとの「なるべく公休を入れない曜日」はできるだけ避ける</li>'+
@@ -1934,7 +1942,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<p>シフト上で入れた<b>有給</b>（黄色の「有」）は、公休と同じく <span class="k">保存</span> で確定します。公休の日数には数えず、有給として数えます。<span class="k">シフト再作成</span>（全員・チーム別とも）をしても消えずに残ります。</p>'+
       h4(5,"警告と「了承済み」")+
       '<p>シフト表の下に警告が出ます（赤＝ルール違反、黄＝注意）。手直しするとすぐに更新されます。</p>'+
-      '<p>月末月初や勉強会の日の希望休など、承知のうえで認める場合は <span class="k">了承済みにする</span> を押すと警告が消えます。一覧の「✓了承済」の×で取り消せます。</p>'+
+      '<p>経理出勤日や勉強会の日の希望休など、承知のうえで認める場合は <span class="k">了承済みにする</span> を押すと警告が消えます。一覧の「✓了承済」の×で取り消せます。</p>'+
       h4(6,"設定・メンバー")+
       '<ul><li><span class="k">設定</span>：被り警告の人数、受注の人数、連勤の上限、公休日数、日曜の扱い、<b>会社休業日</b>の追加・削除、<b>受注の優先順位（ローテーション）</b>の編集</li>'+
       '<li><b>会社休業日</b>：<span class="k">設定</span> で日付を選んで <span class="k">追加</span> → <span class="k">保存</span>。「毎年」にチェックすると毎年同じ日（お盆・年末年始など）、外すとその年だけ。全員休みになり、公休には数えません（公休'+c.kouTarget+'日・週1公休は別に入ります）。今の設定：'+helpCoList()+'</li>'+
