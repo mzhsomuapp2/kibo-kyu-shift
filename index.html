@@ -400,13 +400,12 @@ body.dragging,body.dragging *{cursor:grabbing!important}
         <select id="fMember"></select>
       </div>
       <div class="field"><label for="fDate">日付</label><input type="date" id="fDate"></div>
-      <div class="field"><label>区分</label>
+      <div class="field"><label>区分（休みでなくメモだけのときは、選択を外す）</label>
         <div class="seg" id="segLeave">
           <button type="button" data-v="有給" aria-pressed="true">有給</button>
           <button type="button" data-v="公休" aria-pressed="false">公休</button>
-          <button type="button" data-v="メモ" aria-pressed="false" id="segMemoBtn" hidden>勤務メモ（出勤）</button>
         </div>
-        <p class="hint" id="memoHint" style="margin:6px 0 0" hidden>出勤のまま、退勤時間の変更などをメモできます（休みにはなりません）。</p>
+        <p class="hint" id="memoHint" style="margin:6px 0 0" hidden>区分が選ばれていないので、<b>休みではなく出勤のメモ</b>として登録されます（例：15時退勤／午前は外出 など）。休みの場合は有給か公休を選んでください。</p>
       </div>
       <div class="field" id="applyField"><label>申請タイプ</label>
         <div class="seg" id="segApply">
@@ -642,7 +641,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   // 公開後は作成者だけが修正できる（勤務メモは休みに影響しないので、本人は締切後も修正できる）
   function canEdit(r){if(isAdmin())return true;if(isMemo(r))return isOwn(r)||!newRules(reqPeriod(r));if(!newRules(reqPeriod(r)))return true;return isOwn(r)&&!isPublished(reqPeriod(r));}
   function visibleRequests(){return state.requests.filter(canSee);}
-  // 勤務メモ（パート用。出勤のまま退勤時間などを書く）は leave:"メモ" で requests に保存。休みとしては数えない
+  // 勤務メモ（全員。入力画面で有給／公休を選ばない＝メモ。出勤のまま退勤時間などを書く）は leave:"メモ" で requests に保存。休みとしては数えない
   var MEMO="メモ";
   function isMemo(r){return !!r&&r.leave===MEMO;}
   function isOff(r){return !!r&&r.leave!==MEMO;}
@@ -1688,17 +1687,14 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   }
   function closeAdd(){document.getElementById("addOverlay").classList.remove("on");state.editReq=null;}
   function setSeg(id,val){Array.prototype.forEach.call(document.querySelectorAll("#"+id+" button"),function(b){b.setAttribute("aria-pressed",b.dataset.v===val?"true":"false");});if(id==="segLeave"){state.addLeave=val;syncMemoUI();}else state.addApply=val;}
-  // パートだけ「勤務メモ（出勤）」を選べる。メモのときは申請タイプを隠し、メモ欄を必須にする
+  // 区分（有給／公休）を選ばない＝メモ（全員使える）。メモのときは申請タイプを隠し、メモ欄を必須にする
   function syncMemoUI(){
-    var m=memberById(document.getElementById("fMember").value),part=!!m&&isPart(m);
-    document.getElementById("segMemoBtn").hidden=!part;
-    if(!part&&state.addLeave===MEMO){setSeg("segLeave","有給");return;}
     var memo=state.addLeave===MEMO;
     document.getElementById("applyField").style.display=memo?"none":"";
     document.getElementById("memoHint").hidden=!memo;
     document.getElementById("fNoteLabel").textContent=memo?"メモ（必須）":"備考（任意）";
     document.getElementById("fNote").placeholder=memo?"例）15時退勤／16:30まで　など":"例）午前のみ／通院のため　など";
-    document.getElementById("addTitle").textContent=(memo?"勤務メモを":"希望休を")+(state.editReq?"編集":"追加");
+    document.getElementById("addTitle").textContent=(memo?"メモを":"希望休を")+(state.editReq?"編集":"追加");
   }
   function checkAddNote(){
     syncApply();syncMemoUI();
@@ -1723,8 +1719,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       if(!memo&&((newRules(ps)&&isPublished(ps))||(editing&&!canEdit(editing)))){note.textContent="締切を過ぎています。追加・修正はシフト作成者に依頼してください。";note.classList.add("on");return;}
     }
     if(memo){
-      if(!isPart(m)){note.textContent="勤務メモはパートの方だけ使えます。";note.classList.add("on");return;}
-      if(!document.getElementById("fNote").value.trim()){note.textContent="メモを入力してください（例：15時退勤）。";note.classList.add("on");return;}
+      if(!document.getElementById("fNote").value.trim()){note.textContent="休みの場合は有給か公休を選んでください。メモだけ登録する場合は、メモ欄を入力してください（例：15時退勤）。";note.classList.add("on");return;}
       if(isFixedOff(m,parseYmd(date),date)){note.textContent="この日は固定休です。勤務メモは出勤日に入れてください。";note.classList.add("on");return;}
     }
     var same=state.requests.filter(function(x){return (!editing||x.id!==editing.id)&&x.date===date&&((x.memberId&&x.memberId===m.id)||x.name===m.name);})[0];
@@ -1988,8 +1983,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       h4(7,"気をつけたい日")+
       '<ul><li><b>勉強会の日</b>（基本は第3火曜）：希望休を入れると「勉強会の日程を調整してください」と表示されます。</li>'+
       '<li><b>経理出勤日</b>（月末の最終営業日・月初の初営業日・毎月16日のタイムカード締め）：経理の常勤（'+helpKeiri()+'）は出勤日です。カレンダーに「経理出勤日」と表示され、入力すると注意が出ます（登録はできます）。</li></ul>'+
-      h4(8,"パートの方：勤務メモ")+
-      '<p>区分で <span class="k">勤務メモ（出勤）</span> を選ぶと、出勤のまま「15時退勤」などのメモを残せます。休みにはなりません。締切後も本人が修正できます。</p>'+
+      h4(8,"休みではなくメモだけ入れたいとき")+
+      '<p>入力画面の区分（<span class="k">有給</span>／<span class="k">公休</span>）は、選んでいるボタンをもう一度押すと選択が外れます。<b>どちらも選ばずに</b>メモ欄に「15時退勤」「午前は外出」などを書いて登録すると、<b>休みではなく出勤のメモ</b>として登録されます（カレンダーに「メモ」と表示）。誰でも使え、締切後も本人が修正できます。</p>'+
       h4(9,"公休を避けたい曜日がある方")+
       '<p>「この曜日はできれば出勤したい」など、<b>公休を避けたい曜日</b>がある場合は、各自で設定してください。</p>'+
       '<ol><li>画面上部の <span class="k">メンバー</span> を開く</li><li><b>自分の名前</b>の <span class="k">編集</span> を押す</li>'+
@@ -2231,7 +2226,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     else if(a==="help-open"){openHelp();}
     else if(a==="help-close"){closeHelp();}
   });
-  document.getElementById("segLeave").addEventListener("click",function(ev){var b=ev.target.closest("button");if(b){setSeg("segLeave",b.dataset.v);checkAddNote();}});
+  // 選んでいる区分をもう一度押すと選択が外れる（＝メモ）
+  document.getElementById("segLeave").addEventListener("click",function(ev){var b=ev.target.closest("button");if(b){setSeg("segLeave",b.dataset.v===state.addLeave?MEMO:b.dataset.v);checkAddNote();}});
   document.getElementById("segApply").addEventListener("click",function(ev){var b=ev.target.closest("button");if(b&&!b.disabled)setSeg("segApply",b.dataset.v);});
   document.getElementById("fDate").addEventListener("change",checkAddNote);
   document.getElementById("memberBody").addEventListener("change",function(ev){if(ev.target.classList.contains("mwd")){ev.target.closest("label").classList.toggle("on",ev.target.checked);}});
