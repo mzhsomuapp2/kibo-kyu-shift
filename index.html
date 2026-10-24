@@ -190,6 +190,9 @@ tbody tr:hover{background:var(--surface-2)}
 .hist{list-style:none; margin:0; padding:0}
 .hist li{display:flex; gap:12px; align-items:flex-start; padding:12px 16px; border-bottom:1px solid var(--line)}
 .hist li:last-child{border-bottom:0}
+.hist .hchk{flex:none;display:grid;place-items:center;width:22px;height:26px;cursor:pointer}
+.hist .hchk input{width:16px;height:16px;cursor:pointer}
+.hist li.sel{background:var(--danger-bg)}
 .hist .ico{flex:none; width:26px; height:26px; border-radius:8px; display:grid; place-items:center; font-size:14px; font-weight:800}
 .hist .ico.add{background:var(--accent-weak); color:var(--accent)}
 .hist .ico.remove{background:var(--danger-bg); color:var(--danger-ink)}
@@ -953,7 +956,13 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       if(mode==="db")throw new Error("この保存先では削除できません");
       state.history=keepHistory(state.history,months);saveCache();render();ghTouch();
     }
-    return {init:init,replaceAll:replaceAll,pruneHistory:pruneHistory,mode:storeMode,isGas:function(){return remote==="gas";},addRequest:addRequest,removeRequest:removeRequest,updateRequest:updateRequest,saveConfig:saveConfig,addMember:addMember,updateMember:updateMember,removeMember:removeMember,saveShift:saveShift,gh:{get:function(){return gh;},test:ghTest,connect:ghSaveConnect,disconnect:ghDisconnect,configured:ghConfigured}};
+    // 選んだ履歴だけ削除（共有中はほかの端末にも反映）
+    function deleteHistory(ids){
+      if(mode==="db")throw new Error("この保存先では削除できません");
+      var set={};ids.forEach(function(id){set[id]=1;});
+      state.history=state.history.filter(function(h){return !set[h.id];});saveCache();render();ghTouch();
+    }
+    return {init:init,replaceAll:replaceAll,pruneHistory:pruneHistory,deleteHistory:deleteHistory,mode:storeMode,isGas:function(){return remote==="gas";},addRequest:addRequest,removeRequest:removeRequest,updateRequest:updateRequest,saveConfig:saveConfig,addMember:addMember,updateMember:updateMember,removeMember:removeMember,saveShift:saveShift,gh:{get:function(){return gh;},test:ghTest,connect:ghSaveConnect,disconnect:ghDisconnect,configured:ghConfigured}};
   })();
 
   function reqByDate(){var m={};visibleRequests().forEach(function(r){(m[r.date]=m[r.date]||[]).push(r);});return m;}
@@ -1233,12 +1242,16 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       var d=e.date?parseYmd(e.date):null,dateStr=d?((d.getMonth()+1)+"/"+d.getDate()+"("+WD[d.getDay()]+")"):"";
       var act=e.action==="add"?"追加":e.action==="edit"?"修正":e.action==="ack"?"了承済みに変更":e.action==="unack"?"了承を取り消し":"削除",ico=e.action==="add"?'<div class="ico add">＋</div>':e.action==="edit"?'<div class="ico add">✎</div>':e.action==="ack"||e.action==="unack"?'<div class="ico add">✓</div>':'<div class="ico remove">−</div>';
       var l2=dateStr+" ・ "+esc(e.team||"")+" ・ "+(e.leave===MEMO?"勤務メモ（出勤）":esc(e.leave||"")+" ・ "+esc(e.apply||"")+"申請")+(e.note?" ・ ✎"+esc(e.note):"");
-      return '<li>'+ico+'<div class="body"><div class="line1">'+esc(e.name)+' さんの'+(e.leave===MEMO?'勤務メモを':'希望休を')+act+(e.late?' <span class="tag late">締切後の変更</span>':'')+'</div><div class="line2">'+l2+'</div></div><time>'+when+'</time></li>';
+      var chk=isAdmin()&&e.id?'<label class="hchk"><input type="checkbox" class="hsel" data-hid="'+esc(e.id)+'" aria-label="この履歴を選択"></label>':'';
+      return '<li>'+chk+ico+'<div class="body"><div class="line1">'+esc(e.name)+' さんの'+(e.leave===MEMO?'勤務メモを':'希望休を')+act+(e.late?' <span class="tag late">締切後の変更</span>':'')+'</div><div class="line2">'+l2+'</div></div><time>'+when+'</time></li>';
     }).join("")+'</ul>';}
     // シフト作成者だけ：古い履歴を手で削除（6か月より古いものは自動で消える）
     var bar=isAdmin()?'<div class="toolbar"><span class="hint">全'+state.history.length+'件・'+HISTORY_KEEP_MONTHS+'か月より古い履歴は自動で削除されます</span><span class="spacer"></span>'+
       '<select id="histPruneMonths"><option value="1">1か月</option><option value="3" selected>3か月</option><option value="6">6か月</option></select>'+
-      '<button class="btn sm danger" data-act="hist-prune">より前の履歴を削除</button></div>':'';
+      '<button class="btn sm danger" data-act="hist-prune">より前の履歴を削除</button></div>'+
+      // 選んだ履歴だけ削除
+      '<div class="toolbar"><label class="chk"><input type="checkbox" id="histSelAll"> すべて選択</label><span class="hint" id="histSelCount">0件選択中</span><span class="spacer"></span>'+
+      '<button class="btn sm danger" data-act="hist-del-sel">選択した履歴を削除</button></div>':'';
     return '<div class="panel">'+bar+items+'</div>';
   }
   function histPrune(){
@@ -2037,7 +2050,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<li>公開後は、メンバーもシフト表を開いて公休を切り替え・保存できる状態です。</li>'+
       '<li>データの保存先は右上の表示で確認できます。<b>全員で共有中（スプレッドシート）</b>＝GAS経由で全員のデータが同じ（入力は数秒で保存、ほかの人の画面には15秒ほどで反映）。<b>この端末に保存</b>＝このパソコンのブラウザだけ。</li>'+
       '<li>共有中のデータはスプレッドシートの「希望休一覧」シートでも確認できます（見る用。ここを書き換えてもアプリには反映されません）。</li>'+
-      '<li><span class="k">履歴</span> タブの記録は<b>'+HISTORY_KEEP_MONTHS+'か月</b>より古いものから自動で削除されます。履歴タブ上部の <span class="k">より前の履歴を削除</span> で、1・3・6か月より前の分を手動で消すこともできます（元に戻せません）。</li></ul>';
+      '<li><span class="k">履歴</span> タブの記録は<b>'+HISTORY_KEEP_MONTHS+'か月</b>より古いものから自動で削除されます。履歴タブ上部の <span class="k">より前の履歴を削除</span> で、1・3・6か月より前の分を手動で消すこともできます。特定の履歴だけ消すときは、各行の左のチェックを入れて <span class="k">選択した履歴を削除</span>（<span class="k">すべて選択</span> も可）。どちらも元に戻せません。</li></ul>';
   }
 
   /* ---- toast ---- */
@@ -2204,6 +2217,9 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     else if(a==="set-save"){saveSettings();}
     else if(a==="data-export"){dataExport();}
     else if(a==="hist-prune"){if(isAdmin())histPrune();}
+    else if(a==="hist-del-sel"){if(isAdmin()){var ids=Array.prototype.map.call(document.querySelectorAll(".hsel:checked"),function(c){return c.dataset.hid;});
+      if(!ids.length)showToast("削除する履歴にチェックを入れてください",null,true);
+      else askConfirm("選択した履歴 "+ids.length+"件を削除しますか？（元に戻せません）",function(){try{Store.deleteHistory(ids);showToast("履歴を"+ids.length+"件削除しました");}catch(e){showToast("削除できませんでした："+((e&&e.message)||e),null,true);}},"削除する");}}
     else if(a==="avoid-open"){var mm=memberById(state.viewer);if(mm){openMembers();state.memberEdit=Object.assign({},mm);renderMembers();var av=document.getElementById("mAvoid");if(av)av.scrollIntoView({block:"center"});}}
     else if(a==="goto-submit"){var gp=t.dataset.key.split("-");state.periodStart=new Date(+gp[0],+gp[1]-1,16);render();}
     else if(a==="gas-local-save"){var gu=document.getElementById("fGasUrl").value.trim();
@@ -2220,7 +2236,13 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   document.getElementById("fDate").addEventListener("change",checkAddNote);
   document.getElementById("memberBody").addEventListener("change",function(ev){if(ev.target.classList.contains("mwd")){ev.target.closest("label").classList.toggle("on",ev.target.checked);}});
   document.addEventListener("input",function(ev){if(ev.target.id==="listSearch"){state.listQuery=ev.target.value;document.getElementById("main").innerHTML=viewList();var v=document.getElementById("listSearch");v.focus();v.setSelectionRange(v.value.length,v.value.length);}});
-  document.addEventListener("change",function(ev){if(ev.target.id==="listFilter"){state.listFilter=ev.target.value;render();}else if(ev.target.id==="listAll"){state.listAll=ev.target.checked;render();}else if(ev.target.id==="viewerSel"){saveViewer(ev.target.value);closeDay();render();}else if(ev.target.id==="fRotStart"){renderRotEditor(ev.target.value);}else if(ev.target.id==="fMember"){checkAddNote();}else if(ev.target.id==="fImport"){dataImportFile(ev.target.files&&ev.target.files[0]);}else if(ev.target.classList&&ev.target.classList.contains("rotsel")){rotPreview();}});
+  document.addEventListener("change",function(ev){if(ev.target.id==="listFilter"){state.listFilter=ev.target.value;render();}else if(ev.target.id==="listAll"){state.listAll=ev.target.checked;render();}else if(ev.target.id==="viewerSel"){saveViewer(ev.target.value);closeDay();render();}else if(ev.target.id==="fRotStart"){renderRotEditor(ev.target.value);}else if(ev.target.id==="fMember"){checkAddNote();}else if(ev.target.id==="histSelAll"||(ev.target.classList&&ev.target.classList.contains("hsel"))){
+      if(ev.target.id==="histSelAll")Array.prototype.forEach.call(document.querySelectorAll(".hsel"),function(c){c.checked=ev.target.checked;});
+      var all=document.querySelectorAll(".hsel"),on=document.querySelectorAll(".hsel:checked");
+      Array.prototype.forEach.call(all,function(c){c.closest("li").classList.toggle("sel",c.checked);});
+      var sa=document.getElementById("histSelAll");if(sa){sa.checked=all.length>0&&on.length===all.length;sa.indeterminate=on.length>0&&on.length<all.length;}
+      var hc=document.getElementById("histSelCount");if(hc)hc.textContent=on.length+"件選択中";
+    }else if(ev.target.id==="fImport"){dataImportFile(ev.target.files&&ev.target.files[0]);}else if(ev.target.classList&&ev.target.classList.contains("rotsel")){rotPreview();}});
   // カレンダーの警告一覧の開閉を、画面を描き直しても保つ
   document.addEventListener("toggle",function(ev){if(ev.target.classList&&ev.target.classList.contains("calwarn"))state.calWarnClosed=!ev.target.open;},true);
   document.getElementById("segHelp").addEventListener("click",function(ev){var b=ev.target.closest("button");if(b)setHelpTab(b.dataset.v);});
