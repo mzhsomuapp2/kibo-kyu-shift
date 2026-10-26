@@ -1032,7 +1032,12 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function premAlert(){
     var me=memberById(state.viewer);if(!me||isAdmin())return "";
     var n=premKouCount(me,state.periodStart);if(n<PREM_KOU_MAX)return "";
-    return '<div class="dlalert today"><b>⚠ '+esc(me.name)+'さんは、この期間（'+esc(periodLabel(state.periodStart))+'）の月・金・土の公休希望がすでに'+n+'回入っています。</b><br>1期間に'+PREM_KOU_MAX+'回までのため、これ以上の月・金・土の公休希望は入力できません（有給・メモ・火〜木の公休は入力できます）。</div>';
+    var sK=ymd(state.periodStart),eK=ymd(periodEnd(state.periodStart));
+    var days=state.requests.filter(function(r){return r.leave==="公休"&&r.date>=sK&&r.date<=eK&&isPremium(parseYmd(r.date))&&((r.memberId&&r.memberId===me.id)||r.name===me.name);})
+      .map(function(r){return r.date;}).sort().map(function(k){return mdLabel(k);}).join("、");
+    var head='<b>⚠ '+esc(me.name)+'さんは、この期間（'+esc(periodLabel(state.periodStart))+'）の月・金・土の公休希望がすでに'+n+'回入っています</b>（'+esc(days)+'）';
+    if(n>PREM_KOU_MAX)return '<div class="dlalert today">'+head+'<br>1期間に'+PREM_KOU_MAX+'回までのため、<b>'+(n-PREM_KOU_MAX)+'日分を有給・火〜木の公休などに変更してください</b>。希望をクリックすると変更・取り消しができます。どうしても必要な場合は、シフト作成者に相談してください。</div>';
+    return '<div class="dlalert today">'+head+'<br>1期間に'+PREM_KOU_MAX+'回までのため、これ以上の月・金・土の公休希望は入力できません。ほかの日に休みたい場合は、<b>今の希望を変更するか、有給・火〜木の公休で入力してください</b>（メモは入力できます）。</div>';
   }
   // 希望休の提出期間＝期間開始の前月16日（タイムカード締めの翌日）〜締切日。今が提出期間の期間をカレンダー上部に案内する
   // 提出案内日（表示開始日）：config.announces[periodKey]。未設定なら前月16日
@@ -2056,7 +2061,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<p>受注の優先順位は<b>毎期1人ずつずれる</b>ローテーションです（1位の人は次の期間に最下位）。今の期間：'+helpRank()+'</p>'+
       '<p>公開後、自分の希望休に <span class="tag adj">要調整</span> が付いたら、シフト作成者と別の日を相談してください。</p>'+
       h4(7,"気をつけたい日")+
-      '<ul><li><b>月・金・土（繁忙日）の公休希望</b>：1期間に1人<b>'+PREM_KOU_MAX+'回まで</b>です。'+PREM_KOU_MAX+'回入っていると画面上部に赤い帯で知らせ、それ以上は<b>入力できません</b>（ドラッグで移すこともできません）。有給・メモ・火〜木の公休は入力できます。どうしても必要な場合はシフト作成者に相談してください。</li>'+
+      '<ul><li><b>月・金・土（繁忙日）の公休希望</b>：1期間に1人<b>'+PREM_KOU_MAX+'回まで</b>です。'+PREM_KOU_MAX+'回入っていると画面上部に赤い帯で日付と一緒に知らせ、それ以上は<b>入力できません</b>（ドラッグで移すこともできません）。すでに上限を超えて入っている場合は、超えた日数分を<b>有給や火〜木の公休などに変更してください</b>と表示されます。有給・メモ・火〜木の公休は入力できます。どうしても必要な場合はシフト作成者に相談してください。</li>'+
       '<li><b>希望休の提出不可日</b>（カレンダーに「提出不可」）：繁忙日などの全員出勤日です。有給・公休の希望休は出せません（メモは入れられます）。どうしても休みが必要な場合はシフト作成者に相談してください。<br><span class="hint">今の提出不可日：'+helpNrList()+'</span></li>'+
       '<li><b>勉強会の日</b>（基本は第3火曜）：希望休を入れると「勉強会の日程を調整してください」と表示されます。</li>'+
       '<li><b>経理出勤日</b>（月末の最終営業日・月初の初営業日・毎月16日のタイムカード締め）：経理の常勤（'+helpKeiri()+'）は出勤日です。カレンダーに「経理出勤日」と表示され、入力すると注意が出ます（登録はできます）。</li></ul>'+
