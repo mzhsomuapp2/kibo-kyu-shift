@@ -102,6 +102,8 @@ header.app{display:flex; align-items:flex-end; justify-content:space-between; ga
 .grid .cell.nrday{box-shadow:inset 0 3px 0 var(--danger-ink)}
 .note.err{background:var(--danger-bg);color:var(--danger-ink);border:2px solid var(--danger-line);font-size:13px;line-height:1.7}
 .note .ntitle{display:block;font-size:14.5px;margin-bottom:2px}
+.note.strong{border:2px solid var(--warn-line);font-size:13px;line-height:1.7}
+.note .nsep{border:0;border-top:1px dashed var(--warn-line);margin:8px 0}
 .grid .cell .holname.dlmark{color:#fff;background:var(--danger-line);border-radius:4px;padding:0 4px;display:inline-block;max-width:100%}
 .dlalert{font-size:13.5px;padding:10px 14px;border-radius:10px;margin-bottom:12px;background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-line)}
 .dlalert.today{background:var(--danger-bg);color:var(--danger-ink);border-color:var(--danger-line)}
@@ -1024,7 +1026,13 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   }
 
   function periodBar(){
-    return periodBarCore()+deadlineAlert()+ruleBar()+studyAlert();
+    return periodBarCore()+deadlineAlert()+premAlert()+ruleBar()+studyAlert();
+  }
+  // 名前を選んだメンバーが、表示中の期間で月・金・土の公休希望を上限まで入れているときの警告
+  function premAlert(){
+    var me=memberById(state.viewer);if(!me||isAdmin())return "";
+    var n=premKouCount(me,state.periodStart);if(n<PREM_KOU_MAX)return "";
+    return '<div class="dlalert today"><b>⚠ '+esc(me.name)+'さんは、この期間（'+esc(periodLabel(state.periodStart))+'）の月・金・土の公休希望がすでに'+n+'回入っています。</b><br>1期間に'+PREM_KOU_MAX+'回までのため、これ以上の月・金・土の公休希望は入力できません（有給・メモ・火〜木の公休は入力できます）。</div>';
   }
   // 希望休の提出期間＝期間開始の前月16日（タイムカード締めの翌日）〜締切日。今が提出期間の期間をカレンダー上部に案内する
   // 提出案内日（表示開始日）：config.announces[periodKey]。未設定なら前月16日
@@ -1735,7 +1743,9 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   }
   // 登録できない日（定休日・休業日・提出不可日・締切後など）は赤い注意にして「追加する」を押せなくする
   function checkAddNote(){
+    document.getElementById("addNote").classList.remove("strong");
     var blocked=checkAddNoteInner(),note=document.getElementById("addNote"),btn=document.getElementById("addSaveBtn");
+    if(note.classList.contains("strong")&&note.classList.contains("on"))setTimeout(function(){note.scrollIntoView({block:"nearest"});},0);
     note.classList.toggle("err",!!blocked);btn.disabled=!!blocked;
     if(blocked&&note.classList.contains("on"))setTimeout(function(){note.scrollIntoView({block:"nearest"});},0);
     return blocked;
@@ -1751,14 +1761,18 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       note.classList.add("on");return !isAdmin();}
     if(v&&state.addLeave!==MEMO&&!isAdmin()&&newRules(periodStartForDate(parseYmd(v)))&&isPublished(periodStartForDate(parseYmd(v)))){note.textContent="この期間は締切を過ぎています。追加・修正はシフト作成者に依頼してください。";note.classList.add("on");return true;}
     // 経理の常勤は経理出勤日（月末・月初・タイムカード締め）に出勤。登録はできるが注意を出す
+    // 登録はできるが知らせたい注意（オレンジの太枠＋見出し）
     var warns=[],fm=memberById(document.getElementById("fMember").value);
-    if(v&&state.addLeave!==MEMO&&keiriCore(fm)&&isKeiriDay(v))warns.push("この日は"+keiriDayWhy(v)+"のため、経理は出勤日です。休みが必要な場合はシフト作成者と相談してください（登録はできます）。");
-    // 月・金・土の公休希望は1期間2回まで：3回目以降は注意（登録はできる）
+    if(v&&state.addLeave!==MEMO&&keiriCore(fm)&&isKeiriDay(v))warns.push('<b class="ntitle">⚠ この日は経理出勤日です（'+esc(keiriDayWhy(v))+'）</b>休みが必要な場合は、シフト作成者と相談してください（登録はできます）。');
+    // 月・金・土の公休希望は1期間2回まで：メンバーは3回目を入力できない（シフト作成者は注意だけで登録可）
     if(v&&fm&&state.addLeave==="公休"&&isPremium(parseYmd(v))){
       var pn=premKouCount(fm,periodStartForDate(parseYmd(v)),state.editReq&&state.editReq.id);
-      if(pn>=PREM_KOU_MAX)warns.push("月・金・土の公休希望は1期間に"+PREM_KOU_MAX+"回までです（この期間はすでに"+pn+"回）。登録はできますが、シフト作成時に調整をお願いする場合があります。");
+      if(pn>=PREM_KOU_MAX){
+        if(!isAdmin()){note.innerHTML='<b class="ntitle">⛔ 月・金・土の公休希望は、この期間すでに'+pn+'回入っています</b>1期間に'+PREM_KOU_MAX+'回までのため、これ以上は入力できません。<br>・有給、メモ、火〜木の公休は入力できます。<br>・どうしても必要な場合は、シフト作成者に相談してください。';note.classList.add("on");return true;}
+        warns.push('<b class="ntitle">⚠ 月・金・土の公休希望が上限（'+PREM_KOU_MAX+'回）を超えます</b>この期間はすでに <b>'+pn+'回</b> 入っています（今回で'+(pn+1)+'回目）。シフト作成者として登録できます。');
+      }
     }
-    if(warns.length){note.textContent=warns.join("\n");note.classList.add("on");return false;}
+    if(warns.length){note.innerHTML=warns.join('<hr class="nsep">');note.classList.add("on","strong");return false;}
     note.classList.remove("on");return false;
   }
   async function saveAdd(){
@@ -1769,6 +1783,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     if(state.config.sundayFixed&&parseYmd(date).getDay()===0){note.textContent="日曜は定休日のため登録できません。";note.classList.add("on");return;}
     if(isCompanyOff(date)){note.textContent="会社休業日のため登録できません。";note.classList.add("on");return;}
     if(state.addLeave!==MEMO&&isNoReqDay(date)&&!isAdmin()){note.textContent="この日は希望休の提出不可日（全員出勤日）のため登録できません。休みが必要な場合はシフト作成者に相談してください。";note.classList.add("on");return;}
+    if(state.addLeave==="公休"&&!isAdmin()&&isPremium(parseYmd(date))&&premKouCount(m,periodStartForDate(parseYmd(date)),state.editReq&&state.editReq.id)>=PREM_KOU_MAX){note.textContent="月・金・土の公休希望は1期間に"+PREM_KOU_MAX+"回までのため、これ以上は入力できません。";note.classList.add("on");return;}
     var editing=state.editReq,ps=periodStartForDate(parseYmd(date)),memo=state.addLeave===MEMO;
     if(!isAdmin()){
       if(state.viewer&&m.id!==state.viewer){note.textContent="自分の希望休だけ登録できます。";note.classList.add("on");return;}
@@ -2041,7 +2056,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<p>受注の優先順位は<b>毎期1人ずつずれる</b>ローテーションです（1位の人は次の期間に最下位）。今の期間：'+helpRank()+'</p>'+
       '<p>公開後、自分の希望休に <span class="tag adj">要調整</span> が付いたら、シフト作成者と別の日を相談してください。</p>'+
       h4(7,"気をつけたい日")+
-      '<ul><li><b>月・金・土（繁忙日）の公休希望</b>：1期間に1人<b>'+PREM_KOU_MAX+'回まで</b>です。3回目を入れようとすると注意が出ます（登録はできますが、シフト作成時に調整をお願いする場合があります）。有給は回数に数えません。</li>'+
+      '<ul><li><b>月・金・土（繁忙日）の公休希望</b>：1期間に1人<b>'+PREM_KOU_MAX+'回まで</b>です。'+PREM_KOU_MAX+'回入っていると画面上部に赤い帯で知らせ、それ以上は<b>入力できません</b>（ドラッグで移すこともできません）。有給・メモ・火〜木の公休は入力できます。どうしても必要な場合はシフト作成者に相談してください。</li>'+
       '<li><b>希望休の提出不可日</b>（カレンダーに「提出不可」）：繁忙日などの全員出勤日です。有給・公休の希望休は出せません（メモは入れられます）。どうしても休みが必要な場合はシフト作成者に相談してください。<br><span class="hint">今の提出不可日：'+helpNrList()+'</span></li>'+
       '<li><b>勉強会の日</b>（基本は第3火曜）：希望休を入れると「勉強会の日程を調整してください」と表示されます。</li>'+
       '<li><b>経理出勤日</b>（月末の最終営業日・月初の初営業日・毎月16日のタイムカード締め）：経理の常勤（'+helpKeiri()+'）は出勤日です。カレンダーに「経理出勤日」と表示され、入力すると注意が出ます（登録はできます）。</li></ul>'+
@@ -2134,6 +2149,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     if(state.config.sundayFixed&&d.getDay()===0)return "日曜は定休日です";
     if(isCompanyOff(to))return "会社休業日です";
     if(isNoReqDay(to)&&!isAdmin()&&(src.kind==="kou"||!isMemo(reqById(src.id))))return "希望休の提出不可日（全員出勤日）です";
+    if(src.kind==="req"&&!isAdmin()){var pr=reqById(src.id),pm=pr&&reqMember(pr);
+      if(pr&&pm&&pr.leave==="公休"&&isPremium(d)&&premKouCount(pm,periodStartForDate(d),pr.id)>=PREM_KOU_MAX)return "月・金・土の公休希望はすでに"+PREM_KOU_MAX+"回入っています";}
     if(src.kind==="kou"){
       var m=memberById(src.mid);if(!m)return "メンバーが見つかりません";
       if(tgt.mid&&tgt.mid!==src.mid)return "同じ人の行の中で移動してください";
