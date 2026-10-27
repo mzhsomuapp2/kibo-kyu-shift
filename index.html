@@ -1263,7 +1263,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var full=periodFullyVisible(s),cmap=full?conflictMap(s):{};
     var draft=(state.shiftDraftKey===pKey)?state.shiftDraft:null;
     var savedDoc=state.shifts[pKey];
-    var kou=full?(draft||(savedDoc&&savedDoc.kou)||null):null;
+    var kou=full?kouOrNull(draft||(savedDoc&&savedDoc.kou)):null;
     var gGrid=kou?computeGrid(s,kou):null;
     var gWarn=gGrid||((full&&isAdmin()&&state.members.length)?computeGrid(s,{},true):null); // シフト作成前でも、作成者には希望休の時点の警告を出す
     var cfg=Object.assign({ukeMin:2,ukeTarget:3,weekendTarget:3},state.config);
@@ -1311,7 +1311,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       }
       cells+='<div class="'+cls+'" data-drop="cal" data-dropdate="'+key+'"'+(isSun?'':' data-act="'+(full?"day":"add-day")+'" data-date="'+key+'"')+'>'+inner+'</div>';
     });
-    var badge=draft?'<span class="badge-unsaved">未保存の変更あり</span>':(savedDoc?'<span class="badge-saved">シフト保存済み '+shortTime(savedDoc.at)+'</span>':'');
+    var badge=draft?'<span class="badge-unsaved">未保存の変更あり</span>':((savedDoc&&kou)?'<span class="badge-saved">シフト保存済み '+shortTime(savedDoc.at)+'</span>':'');
     var shiftCtrl='<div class="shiftbar">'+
       genButtons(state.members.length>0,kou)+
       (draft?'<button class="btn" data-act="shift-save">保存</button><button class="btn ghost" data-act="shift-discard">取消</button>':'')+
@@ -1446,7 +1446,13 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function reqMap(){var by={};state.members.forEach(function(m){by[m.id]={};});offRequests().forEach(function(r){var m=(r.memberId&&state.members.filter(function(x){return x.id===r.memberId;})[0])||state.members.filter(function(x){return x.name===r.name;})[0];if(m)by[m.id][r.date]=r;});return by;}
   function firstLongRun(arr,minLen){var i=0,n=arr.length;while(i<n){if(arr[i]==="W"){var s=i;while(i<n&&arr[i]==="W")i++;if(i-s>=minLen)return {s:s,e:i-1};}else i++;}return null;}
   function maxWorkRun(cells){var mx=0,c=0;cells.forEach(function(x){if(x.t==="wk"){c++;if(c>mx)mx=c;}else c=0;});return mx;}
-  function periodHasShift(ps){var pk=periodKey(ps);return !!((state.shiftDraftKey===pk&&state.shiftDraft)||(state.shifts[pk]&&state.shifts[pk].kou));}
+  // 公休・有給が1つも入っていないシフト（マスを切り替えて戻しただけで保存した等）は「シフトなし」として扱う
+  function kouOrNull(k){
+    if(!k)return null;
+    var has=Object.keys(k).some(function(id){var v=k[id];if(id==="__yu")return Object.keys(v||{}).some(function(m){return (v[m]||[]).length>0;});return Array.isArray(v)&&v.length>0;});
+    return has?k:null;
+  }
+  function periodHasShift(ps){var pk=periodKey(ps);return !!kouOrNull((state.shiftDraftKey===pk&&state.shiftDraft)||(state.shifts[pk]&&state.shifts[pk].kou));}
   function workedOn(m,d){var key=ymd(d);return !isCompanyOff(key)&&!isFixedOff(m,d,key)&&!reqOnDate(m,key)&&!kouGlobal(m.id,key)&&!yuGlobal(m.id,key);}
   // 前期間の末尾・次期間の先頭から続く勤務日数。隣の期間のシフトがあるときだけ数える
   function edgeRuns(m,periodStart){
@@ -1706,9 +1712,9 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var key=periodKey(state.periodStart);
     var draft=(state.shiftDraftKey===key)?state.shiftDraft:null;
     var savedDoc=state.shifts[key];
-    var kou=draft||(savedDoc&&savedDoc.kou)||null;
+    var kou=kouOrNull(draft||(savedDoc&&savedDoc.kou));
     var hasMembers=state.members.length>0;
-    var badge=draft?'<span class="badge-unsaved">未保存の変更あり</span>':(savedDoc?'<span class="badge-saved">保存済み '+shortTime(savedDoc.at)+'</span>':'');
+    var badge=draft?'<span class="badge-unsaved">未保存の変更あり</span>':((savedDoc&&kou)?'<span class="badge-saved">保存済み '+shortTime(savedDoc.at)+'</span>':'');
     var bar='<div class="shiftbar">'+
       genButtons(hasMembers,kou)+
       (kou?'<button class="btn" data-act="shift-save">保存</button>':'')+(draft?'<button class="btn ghost" data-act="shift-discard">取消</button>':'')+badge+
@@ -1813,7 +1819,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function shiftDiscard(){var key=periodKey(state.periodStart);if(state.shiftDraftKey===key){state.shiftDraft=null;state.shiftDraftKey=null;}render();}
 
   /* ---- day editor (calendar) ---- */
-  function currentKou(){var pKey=periodKey(state.periodStart);var draft=(state.shiftDraftKey===pKey)?state.shiftDraft:null;return draft||(state.shifts[pKey]&&state.shifts[pKey].kou)||null;}
+  function currentKou(){var pKey=periodKey(state.periodStart);var draft=(state.shiftDraftKey===pKey)?state.shiftDraft:null;return kouOrNull(draft||(state.shifts[pKey]&&state.shifts[pKey].kou));}
   function ensureDraft(){var pKey=periodKey(state.periodStart);if(state.shiftDraftKey!==pKey||!state.shiftDraft){var saved=state.shifts[pKey]&&state.shifts[pKey].kou;state.shiftDraft=saved?JSON.parse(JSON.stringify(saved)):{};state.shiftDraftKey=pKey;}return state.shiftDraft;}
   function openDay(dateStr){state.dayEditDate=dateStr;renderDay();document.getElementById("dayOverlay").classList.add("on");}
   function closeDay(){document.getElementById("dayOverlay").classList.remove("on");}
