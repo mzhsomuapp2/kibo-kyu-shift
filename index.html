@@ -119,6 +119,19 @@ header.app{display:flex; align-items:flex-end; justify-content:space-between; ga
 .note.strong{border:2px solid var(--warn-line);font-size:13px;line-height:1.7}
 .note .nsep{border:0;border-top:1px dashed var(--warn-line);margin:8px 0}
 .grid .cell .holname.dlmark{color:#fff;background:var(--danger-line);border-radius:4px;padding:0 4px;display:inline-block;max-width:100%}
+.noticebar{font-size:13.5px;padding:10px 14px;border-radius:10px;margin-bottom:12px;background:var(--surface);color:var(--ink);border:2px solid var(--accent);border-left-width:6px}
+.noticebar .nb-h{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-weight:800;color:var(--accent);margin-bottom:4px}
+.noticebar .nb-d{font-size:12.5px;font-weight:700;color:var(--ink-soft)}
+.noticebar .nb-t{white-space:pre-line;font-weight:600}
+.holname.ntmark{color:var(--accent);font-weight:800}
+.memo-new{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px}
+.memo-new textarea,.memo-card textarea{width:100%;font-family:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface-2);color:var(--ink);resize:vertical;min-height:90px;line-height:1.6}
+.memo-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.memo-list{display:flex;flex-direction:column;gap:10px}
+.memo-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.memo-card.pin{border:2px solid var(--accent)}
+.memo-card .mt{white-space:pre-line;font-size:14px;line-height:1.6;word-break:break-word}
+.memo-card .mm{font-size:11.5px;color:var(--ink-faint)}
 .dlalert{font-size:13.5px;padding:10px 14px;border-radius:10px;margin-bottom:12px;background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-line)}
 .dlalert.today{background:var(--danger-bg);color:var(--danger-ink);border-color:var(--danger-line)}
 .pb-actions{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
@@ -401,6 +414,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     <button role="tab" data-act="tab" data-view="list" aria-selected="false">一覧</button>
     <button role="tab" data-act="tab" data-view="history" aria-selected="false">履歴</button>
     <button role="tab" data-act="tab" data-view="shift" aria-selected="false">シフト</button>
+    <button role="tab" data-act="tab" data-view="memo" aria-selected="false" hidden>メモ</button>
   </div>
   <div id="main"></div>
 </div>
@@ -515,6 +529,25 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       <p class="hint">既定は第3火曜日です。前後する場合はここで変更できます（この期間だけに反映）。この日は自動シフトで公休を割り当てず、休みの人がいると警告します。</p>
     </div>
     <div class="foot"><button class="btn ghost" data-act="study-none">なしにする</button><button class="btn ghost" data-act="study-reset">既定に戻す</button><button class="btn ghost" data-act="study-close">閉じる</button><button class="btn primary" data-act="study-save">保存</button></div>
+  </div>
+</div>
+
+<!-- notice（シフト作成者からのお知らせ・お願い） -->
+<div class="overlay" id="noticeOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="noticeTitle" style="max-width:420px">
+    <h3 id="noticeTitle">お知らせ・お願い</h3>
+    <div class="form">
+      <p class="hint" id="noticePeriod" style="margin:0"></p>
+      <div class="field"><label for="fNoticeText">内容（メンバー全員の画面上部に表示されます）</label><textarea id="fNoticeText" rows="4" placeholder="例）12/24(木)・12/25(金)は棚卸のため、希望休を入れないようにしてください。"></textarea></div>
+      <div class="field"><label for="fNoticeDate">対象の日（任意・複数可）</label>
+        <div id="fNoticeList" class="colist"></div>
+        <div class="rotrow" style="margin-top:8px;flex-wrap:wrap"><input type="date" id="fNoticeDate" style="flex:1;min-width:150px;font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface-2);color:var(--ink)">
+          <button type="button" class="btn sm" data-act="notice-date-add">追加</button></div>
+        <p class="hint" style="margin:6px 0 0">対象の日を入れると、カレンダーにその日の印が付き、メンバーがその日に希望休を入れようとしたときに内容を表示します（入力はできます）。自動作成でもその日には公休を入れず、休みの人がいれば警告に出ます。<br>入力自体を止めたい日は「設定」の「希望休の提出不可日」を使ってください。</p>
+      </div>
+      <div class="note" id="noticeNote"></div>
+    </div>
+    <div class="foot"><button class="btn danger" id="noticeDelBtn" data-act="notice-del">削除</button><button class="btn ghost" data-act="notice-close">閉じる</button><button class="btn primary" data-act="notice-save">保存</button></div>
   </div>
 </div>
 
@@ -675,7 +708,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function isOff(r){return !!r&&r.leave!==MEMO;}
   function offRequests(){return state.requests.filter(isOff);}
   // 了承済み（シフト作成者が承知のうえで認めた希望休）。r.acks={edge:true,study:true}。日付を変えると外す
-  var ACK_LABEL={edge:"経理出勤日",study:"勉強会",noreq:"提出不可日"};
+  var ACK_LABEL={edge:"経理出勤日",study:"勉強会",noreq:"提出不可日",notice:"お知らせの日"};
   function isAcked(r,kind){return !!(r&&r.acks&&r.acks[kind]);}
   function setAck(id,kind,on){
     var r=reqById(id);if(!r||!isAdmin())return;
@@ -805,10 +838,18 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     function mergeCol(anc,ours,theirs){var a=idxId(anc),o=idxId(ours),t=idxId(theirs);Object.keys(o).forEach(function(id){if(!a[id]||JSON.stringify(a[id])!==JSON.stringify(o[id]))t[id]=o[id];});Object.keys(a).forEach(function(id){if(!o[id])delete t[id];});return Object.keys(t).map(function(id){return t[id];});}
     function toArr(m){return Object.keys(m||{}).map(function(k){return m[k];});}
     function mergeShifts(anc,ours,theirs){var arr=mergeCol(toArr(anc),toArr(ours),toArr(theirs)),out={};arr.forEach(function(v){out[v.id]=v;});return out;}
-    function cfgEq(a,b){return JSON.stringify(Object.assign({},DEF,a))===JSON.stringify(Object.assign({},DEF,b));}
+    // 設定のうち、お知らせ（notices）と作成者メモ（adminMemos）は1件ずつ合わせる（同時に書いても消えないように）
+    var CFG_LISTS=["notices","adminMemos"];
+    function cfgStrip(c){var o=Object.assign({},DEF,c);CFG_LISTS.forEach(function(k){delete o[k];});return o;}
+    function cfgEq(a,b){return JSON.stringify(cfgStrip(a))===JSON.stringify(cfgStrip(b));}
+    function mergeCfg(anc,ours,theirs){
+      var c=Object.assign({},cfgEq(ours,anc)?theirs:ours);
+      CFG_LISTS.forEach(function(k){var l=mergeCol((anc||{})[k],(ours||{})[k],(theirs||{})[k]);if(l.length)c[k]=l;else delete c[k];});
+      return c;
+    }
     function ghMerge(anc,ours,theirs){
       var hist=mergeCol(anc.history,ours.history,theirs.history);hist.sort(function(a,b){return (b.at||0)-(a.at||0);});hist=keepHistory(hist);
-      return {members:mergeCol(anc.members,ours.members,theirs.members),requests:mergeCol(anc.requests,ours.requests,theirs.requests),history:hist,shifts:mergeShifts(anc.shifts,ours.shifts,theirs.shifts),config:cfgEq(ours.config,anc.config)?theirs.config:ours.config};
+      return {members:mergeCol(anc.members,ours.members,theirs.members),requests:mergeCol(anc.requests,ours.requests,theirs.requests),history:hist,shifts:mergeShifts(anc.shifts,ours.shifts,theirs.shifts),config:mergeCfg(anc.config,ours.config,theirs.config)};
     }
     function ghAdopt(obj){state.members=obj.members.slice();state.requests=obj.requests.slice();state.history=obj.history.slice();var sh={};Object.keys(obj.shifts).forEach(function(k){sh[k]=obj.shifts[k];});state.shifts=sh;state.config=Object.assign({},DEF,obj.config);saveCache();}
     async function ghConnect(){
@@ -1000,12 +1041,15 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function render(){
     var st=document.getElementById("status");st.setAttribute("data-mode",state.storeMode);
     document.getElementById("statusText").textContent={connecting:"接続中…",db:"全員で共有・保存中",local:"この端末に保存",memory:"一時表示（保存なし）","github":"GitHubで共有中","github-sync":"GitHub同期中…","github-err":"接続エラー（タップで設定）","gas":"全員で共有中（スプレッドシート）","gas-sync":"保存・同期中…","gas-err":"共有データに接続できません"}[state.storeMode]||"";
-    // 履歴タブはシフト作成者だけに表示（記録自体は全員分を残す）
-    if(state.view==="history"&&!isAdmin())state.view="calendar";
-    Array.prototype.forEach.call(document.querySelectorAll('.tabs button'),function(b){b.setAttribute("aria-selected",b.dataset.view===state.view?"true":"false");if(b.dataset.view==="history")b.hidden=!isAdmin();});
+    // 履歴タブ・メモタブはシフト作成者だけに表示（履歴の記録自体は全員分を残す）
+    if((state.view==="history"||state.view==="memo")&&!isAdmin())state.view="calendar";
+    Array.prototype.forEach.call(document.querySelectorAll('.tabs button'),function(b){b.setAttribute("aria-selected",b.dataset.view===state.view?"true":"false");if(b.dataset.view==="history"||b.dataset.view==="memo")b.hidden=!isAdmin();});
     renderViewer();
     var main=document.getElementById("main");
-    main.innerHTML=state.view==="calendar"?viewCalendar():state.view==="list"?viewList():state.view==="history"?viewHistory():viewShift();
+    // メモを書いている途中に同期で描き直されても、入力中の文字とカーソル位置を保つ
+    var ae=document.activeElement,keep=(ae&&ae.id&&ae.tagName==="TEXTAREA"&&main.contains(ae))?{id:ae.id,s:ae.selectionStart,e:ae.selectionEnd}:null;
+    main.innerHTML=state.view==="calendar"?viewCalendar():state.view==="list"?viewList():state.view==="history"?viewHistory():state.view==="memo"?viewMemo():viewShift();
+    if(keep){var ta=document.getElementById(keep.id);if(ta){ta.focus();try{ta.setSelectionRange(keep.s,keep.e);}catch(e){}}}
     if(document.getElementById("memberOverlay").classList.contains("on")&&state.memberEdit===null)renderMembers();
   }
 
@@ -1040,7 +1084,84 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   }
 
   function periodBar(){
-    return periodBarCore()+deadlineAlert()+premAlert()+ruleBar()+studyAlert();
+    return periodBarCore()+deadlineAlert()+noticeBar()+premAlert()+ruleBar()+studyAlert();
+  }
+  // シフト作成者からのお知らせ・お願い（期間ごと）：config.notices=[{id,pk,dates:[],text,at}]
+  //   dates の日＝希望休を控えてもらう日（カレンダーに印、入力時に注意、自動作成で公休を入れない、休みの人を警告）
+  function newId(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+  function noticesFor(ps){var pk=periodKey(ps);return (state.config.notices||[]).filter(function(n){return n.pk===pk;}).sort(function(a,b){return (a.at||0)-(b.at||0);});}
+  function noticesOn(key){return (state.config.notices||[]).filter(function(n){return (n.dates||[]).indexOf(key)>=0;});}
+  function isNoticeDay(key){return noticesOn(key).length>0;}
+  function noticeBar(){
+    return noticesFor(state.periodStart).map(function(n){
+      var ds=(n.dates||[]).slice().sort().map(mdLabel).join("、");
+      return '<div class="noticebar"><div class="nb-h">📢 シフト作成者からのお知らせ'+(ds?'<span class="nb-d">対象日：'+esc(ds)+'</span>':'')+
+        (isAdmin()?'<span style="flex:1"></span><button class="btn ghost sm" data-act="notice-edit" data-id="'+esc(n.id)+'">編集</button>':'')+'</div><div class="nb-t">'+esc(n.text)+'</div></div>';
+    }).join("");
+  }
+  function openNotice(id){
+    if(!isAdmin())return;
+    var n=id?(state.config.notices||[]).filter(function(x){return x.id===id;})[0]:null,s=n?periodFromKey(n.pk):state.periodStart;
+    state.noticeEdit={id:n?n.id:null,pk:periodKey(s),dates:n?(n.dates||[]).slice():[]};
+    document.getElementById("noticePeriod").textContent="期間 "+periodLabel(s);
+    document.getElementById("fNoticeText").value=n?n.text:"";
+    var di=document.getElementById("fNoticeDate");di.min=ymd(s);di.max=ymd(periodEnd(s));di.value="";
+    document.getElementById("noticeDelBtn").hidden=!n;
+    document.getElementById("noticeNote").classList.remove("on");
+    renderNoticeDates();
+    document.getElementById("noticeOverlay").classList.add("on");
+    setTimeout(function(){document.getElementById("fNoticeText").focus();},50);
+  }
+  function closeNotice(){document.getElementById("noticeOverlay").classList.remove("on");state.noticeEdit=null;}
+  function renderNoticeDates(){
+    var l=state.noticeEdit.dates.slice().sort();
+    document.getElementById("fNoticeList").innerHTML=l.length?l.map(function(v){return '<span class="co">'+esc(mdLabel(v))+'<button type="button" data-act="notice-date-del" data-v="'+esc(v)+'" aria-label="'+esc(mdLabel(v))+'を削除">×</button></span>';}).join(""):'<span class="hint">（なし）</span>';
+  }
+  function noticeDateAdd(){
+    var e=state.noticeEdit,v=document.getElementById("fNoticeDate").value,note=document.getElementById("noticeNote"),s=periodFromKey(e.pk);
+    var err=!v?"日付を選んでください。":(v<ymd(s)||v>ymd(periodEnd(s)))?"この期間（"+periodLabel(s)+"）の中の日付を選んでください。":e.dates.indexOf(v)>=0?"その日はすでに入っています。":"";
+    if(err){note.textContent=err;note.classList.add("on");return;}
+    note.classList.remove("on");e.dates.push(v);document.getElementById("fNoticeDate").value="";renderNoticeDates();
+  }
+  function saveNotice(){
+    var e=state.noticeEdit,text=document.getElementById("fNoticeText").value.trim(),note=document.getElementById("noticeNote");
+    if(!text){note.textContent="内容を入力してください。";note.classList.add("on");return;}
+    var list=(state.config.notices||[]).slice(),old=e.id?list.filter(function(x){return x.id===e.id;})[0]:null;
+    var item={id:e.id||newId("n"),pk:e.pk,dates:e.dates.slice().sort(),text:text,at:old?old.at:Date.now()};
+    list=list.filter(function(x){return x.id!==item.id;});list.push(item);
+    Store.saveConfig(Object.assign({},state.config,{notices:list})).then(function(){closeNotice();showToast("お知らせを保存しました");}).catch(function(){alert("保存できませんでした");});
+  }
+  function delNotice(){
+    var id=state.noticeEdit&&state.noticeEdit.id;if(!id)return;
+    askConfirm("このお知らせを削除しますか？",function(){Store.saveConfig(Object.assign({},state.config,{notices:(state.config.notices||[]).filter(function(x){return x.id!==id;})})).then(function(){closeNotice();});});
+  }
+
+  // シフト作成者のメモ（期間に関係なくいつでも使える）：config.adminMemos=[{id,text,at,upd,pin}]
+  // ※メンバーの画面には出ないが、共有データ（スプレッドシート）には保存される
+  function viewMemo(){
+    var list=(state.config.adminMemos||[]).slice().sort(function(a,b){return ((b.pin?1:0)-(a.pin?1:0))||((b.upd||b.at||0)-(a.upd||a.at||0));});
+    var dr=state.memoDrafts||{};
+    var html='<div class="memo-new"><div style="font-weight:800;margin-bottom:6px">📝 シフト作成者のメモ</div>'+
+      '<textarea id="memoNew" placeholder="自由に書けます（例：来月の調整メモ、引き継ぎ事項など）">'+esc(dr.__new||"")+'</textarea>'+
+      '<div class="memo-row"><button class="btn primary" data-act="memo-add">メモを追加</button><span class="hint">メンバーの画面には表示されません（共有データには保存されるので、見られて困る個人情報は書かないでください）。</span></div></div>';
+    if(!list.length)html+='<div class="panel"><div class="empty"><div class="big">メモはまだありません</div>上の欄に書いて「メモを追加」を押してください。</div></div>';
+    else html+='<div class="memo-list">'+list.map(function(m){
+      var meta=(m.pin?'📌 ピン留め　':'')+'作成 '+shortTime(m.at)+(m.upd&&m.upd!==m.at?'　更新 '+shortTime(m.upd):'');
+      if(state.memoEditId===m.id)return '<div class="memo-card'+(m.pin?' pin':'')+'"><textarea id="memoEdit_'+esc(m.id)+'">'+esc(dr[m.id]!=null?dr[m.id]:m.text)+'</textarea>'+
+        '<div class="memo-row"><button class="btn primary sm" data-act="memo-save" data-id="'+esc(m.id)+'">保存</button><button class="btn ghost sm" data-act="memo-cancel">キャンセル</button><span style="flex:1"></span><button class="btn danger sm" data-act="memo-del" data-id="'+esc(m.id)+'">削除</button></div></div>';
+      return '<div class="memo-card'+(m.pin?' pin':'')+'"><div class="mt">'+esc(m.text)+'</div>'+
+        '<div class="memo-row"><span class="mm">'+esc(meta)+'</span><span style="flex:1"></span><button class="btn ghost sm" data-act="memo-pin" data-id="'+esc(m.id)+'">'+(m.pin?'ピンを外す':'📌 ピン留め')+'</button><button class="btn ghost sm" data-act="memo-edit" data-id="'+esc(m.id)+'">編集</button></div></div>';
+    }).join("")+'</div>';
+    return html;
+  }
+  function memoSaveList(list,msg){return Store.saveConfig(Object.assign({},state.config,{adminMemos:list})).then(function(){if(msg)showToast(msg);}).catch(function(){alert("保存できませんでした");});}
+  function memoAdd(){
+    var ta=document.getElementById("memoNew"),text=ta?ta.value.trim():"";if(!text){showToast("メモの内容を入力してください",null,true);return;}
+    var now=Date.now();if(state.memoDrafts)delete state.memoDrafts.__new;
+    memoSaveList((state.config.adminMemos||[]).concat([{id:newId("mm"),text:text,at:now,upd:now}]),"メモを追加しました");
+  }
+  function memoUpdate(id,patch,msg){
+    memoSaveList((state.config.adminMemos||[]).map(function(m){return m.id===id?Object.assign({},m,patch):m;}),msg);
   }
   // 名前を選んだメンバーが、表示中の期間で月・金・土の公休希望を上限まで入れているときの警告
   function premAlert(){
@@ -1113,7 +1234,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<button class="nav" data-act="prev" aria-label="前の期間">‹</button>'+
       '<div class="label"><div class="big numeric">'+esc(periodLabel(s))+'</div><div class="meta">'+esc(periodYearMeta(s))+'</div></div>'+
       '<button class="nav" data-act="next" aria-label="次の期間">›</button></div>'+
-      '<div class="pb-actions">'+dlBtn+studyBtn()+back+
+      '<div class="pb-actions">'+dlBtn+studyBtn()+(isAdmin()?'<button class="btn ghost sm" data-act="notice-new" title="この期間のお知らせ・お願いをメンバーに表示">＋ お知らせ</button>':'')+back+
       '<button class="btn ghost sm" data-act="member-open">メンバー</button>'+
       '<button class="btn ghost sm" data-act="settings-open">設定</button>'+
       '<button class="btn primary" data-act="add-open"'+(state.storeReady?'':' disabled')+'>＋ 希望休を追加</button></div></div>';
@@ -1160,6 +1281,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       var todayDot=sameDay(d,today)?'<span class="today-dot"></span>':'';
       var holHtml=(hol&&!isSun)?'<div class="holname" title="'+esc(hol)+'">'+esc(hol)+'</div>':'';
       var studyHtml=(studyKey&&key===studyKey&&!isSun)?'<div class="holname" style="color:var(--accent)" title="勉強会">勉強会</div>':'';
+      var ntOn=isSun?[]:noticesOn(key);
+      if(ntOn.length)studyHtml+='<div class="holname ntmark" title="'+esc(ntOn.map(function(n){return n.text;}).join("\n"))+'">📢 お知らせの日</div>';
       if(!isSun&&edgeKs.indexOf(key)>=0)studyHtml+='<div class="holname" style="color:var(--kei-ink)" title="'+esc(keiriDayWhy(key))+'のため経理（常勤）は出勤">経理出勤日</div>';
       if(!isSun&&isNoReqDay(key)){studyHtml+='<div class="holname nrmark" title="希望休の提出不可日（全員出勤日）">⛔ 提出不可</div>';cls+=" nrday";}
       var dlFor=deadlineForDays[key];
@@ -1412,7 +1535,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     function runLenAt(mid,i){if(st[mid][i]!=="W")return 0;var s=i,e=i;while(s>0&&st[mid][s-1]==="W")s--;while(e<st[mid].length-1&&st[mid][e+1]==="W")e++;return e-s+1;}
     var edgeKeys=keiriDayKeys(periodStart);
     function eligible(m,i){if(st[m.id][i]!=="W")return false;var d=days[i];if(d.getDay()===0)return false;if(studyKey&&ymd(d)===studyKey)return false;
-      if(isNoReqDay(ymd(d)))return false; // 希望休の提出不可日（全員出勤日）には自動で公休を入れない
+      if(isNoReqDay(ymd(d))||isNoticeDay(ymd(d)))return false; // 希望休の提出不可日（全員出勤日）・お知らせの対象日には自動で公休を入れない
       if(keiriCore(m)&&edgeKeys.indexOf(ymd(d))>=0)return false;if(m.team==="受注"&&teamWork("受注",i,m.id)<cfg.ukeMin)return false;
       // 月金土は受注の出勤が目標人数（既定3人）以上残るときだけ公休を入れる
       if(m.team==="受注"&&isPremium(d)&&teamWork("受注",i,m.id)<cfg.weekendTarget)return false;return true;}
@@ -1473,7 +1596,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       });
     }
     // パートは固定休と希望休以外は出勤でよいので、連勤の区切りでも公休を入れない（6連勤以上は警告のみ）
-    members.forEach(function(m){if(isPart(m)||kept(m))return;var g2=0;while(g2++<40){var wr=st[m.id].map(function(v){return v==="W"?"W":"O";});var run=firstLongRun(wr,cfg.maxConsec+1);if(!run)break;var placed=-1,fallback=-1;for(var i=run.s;i<=run.e;i++){if(st[m.id][i]==="W"&&(m.team!=="受注"||teamWork("受注",i,m.id)>=cfg.ukeMin)&&!(m.team==="経理"&&!isPart(m)&&keiNonPartOff(i,m.id)>=1)&&!(keiriCore(m)&&edgeKeys.indexOf(ymd(days[i]))>=0)&&!isNoReqDay(ymd(days[i]))){if(avoidsDay(m,days[i])){if(fallback<0)fallback=i;continue;}placed=i;break;}}if(placed<0)placed=fallback;if(placed<0)break;st[m.id][placed]="K";}});
+    members.forEach(function(m){if(isPart(m)||kept(m))return;var g2=0;while(g2++<40){var wr=st[m.id].map(function(v){return v==="W"?"W":"O";});var run=firstLongRun(wr,cfg.maxConsec+1);if(!run)break;var placed=-1,fallback=-1;for(var i=run.s;i<=run.e;i++){if(st[m.id][i]==="W"&&(m.team!=="受注"||teamWork("受注",i,m.id)>=cfg.ukeMin)&&!(m.team==="経理"&&!isPart(m)&&keiNonPartOff(i,m.id)>=1)&&!(keiriCore(m)&&edgeKeys.indexOf(ymd(days[i]))>=0)&&!isNoReqDay(ymd(days[i]))&&!isNoticeDay(ymd(days[i]))){if(avoidsDay(m,days[i])){if(fallback<0)fallback=i;continue;}placed=i;break;}}if(placed<0)placed=fallback;if(placed<0)break;st[m.id][placed]="K";}});
     var kou={};members.forEach(function(m){
       if(kept(m)){if(curKou[m.id]&&curKou[m.id].length)kou[m.id]=curKou[m.id].slice();return;}
       var ds=[];st[m.id].forEach(function(v,i){if(v==="K")ds.push(ymd(days[i]));});if(ds.length)kou[m.id]=ds;});
@@ -1539,6 +1662,14 @@ body.dragging,body.dragging *{cursor:grabbing!important}
         var cl=rowOf(m.id).cells[i];if(cl.t==="wk"||cl.t==="fx"||cl.t==="co")return;
         if(cl.t==="rq"&&isAcked(cl.req,"noreq"))return;
         warnings.push({cat:"noreq",err:false,text:md+" は希望休の提出不可日（全員出勤日）です："+m.name+"さんが"+(cl.t==="rq"?cl.leave+"の希望休":cl.t==="ko"?"公休":cl.t==="yu"?"有給":"休み"),acks:cl.t==="rq"?[{r:cl.req,kind:"noreq"}]:[]});
+      });
+      // シフト作成者からのお知らせの対象日に休みの人（固定休・定休日・休業日は除く。了承済みの希望休も除く）
+      var nts=c.isSun?[]:noticesOn(ymd(d));
+      if(nts.length)members.forEach(function(m){
+        var cl=rowOf(m.id).cells[i];if(cl.t==="wk"||cl.t==="fx"||cl.t==="co")return;
+        if(cl.t==="rq"&&isAcked(cl.req,"notice"))return;
+        var nt=nts[0].text.replace(/\s+/g," ");if(nt.length>30)nt=nt.slice(0,30)+"…";
+        warnings.push({cat:"notice",err:false,text:md+" はお知らせの対象日です（"+nt+"）："+m.name+"さんが"+(cl.t==="rq"?cl.leave+"の希望休":cl.t==="ko"?"公休":cl.t==="yu"?"有給":"休み"),acks:cl.t==="rq"?[{r:cl.req,kind:"notice"}]:[]});
       });
       if(c.study){
         var off=members.filter(function(m){var cl=rowOf(m.id).cells[i];return cl.t!=="wk"&&!(cl.t==="rq"&&isAcked(cl.req,"study"));});
@@ -1615,6 +1746,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   var WARN_CATS=[
     ["staff","出勤人数（受注・経理）","休みが重なって人が足りない日です。誰かの休みを別の日へ移せないか確認してください。"],
     ["edge","経理出勤日（月末・月初・16日）","経理の常勤は出勤が必要な日です。本人と調整するか、問題なければ「了承済みにする」を押してください。"],
+    ["notice","お知らせの対象日","シフト作成者のお知らせで、希望休を控えてもらう日です。本人と調整するか、問題なければ「了承済みにする」を押してください。"],
     ["noreq","希望休の提出不可日（全員出勤日）","全員出勤の日に休みが入っています。本人と調整するか、問題なければ「了承済みにする」を押してください。"],
     ["study","勉強会","勉強会の日に休みの人がいます。問題なければ「了承済みにする」を押してください。"],
     ["prem","月・金・土の公休希望","1期間"+PREM_KOU_MAX+"回までを超えています。本人と調整してください。"],
@@ -1818,6 +1950,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
         warns.push('<b class="ntitle">⚠ 月・金・土の公休希望が上限（'+PREM_KOU_MAX+'回）を超えます</b>この期間はすでに <b>'+pn+'回</b> 入っています（今回で'+(pn+1)+'回目）。シフト作成者として登録できます。');
       }
     }
+    // シフト作成者からのお知らせの対象日：内容を見せる（登録はできる）
+    if(v&&state.addLeave!==MEMO)noticesOn(v).forEach(function(n){warns.push('<b class="ntitle">📢 この日はシフト作成者からのお知らせがあります</b>'+esc(n.text)+'<br>休みが必要な場合は、シフト作成者と相談してください（登録はできます）。');});
     if(warns.length){note.innerHTML=warns.join('<hr class="nsep">');note.classList.add("on","strong");return false;}
     note.classList.remove("on");return false;
   }
@@ -2102,7 +2236,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<p>受注の優先順位は<b>毎期1人ずつずれる</b>ローテーションです（1位の人は次の期間に最下位）。今の期間：'+helpRank()+'</p>'+
       '<p>公開後、自分の希望休に <span class="tag adj">要調整</span> が付いたら、シフト作成者と別の日を相談してください。</p>'+
       h4(7,"気をつけたい日")+
-      '<ul><li><b>月・金・土（繁忙日）の公休希望</b>：1期間に1人<b>'+PREM_KOU_MAX+'回まで</b>です。'+PREM_KOU_MAX+'回入っていると画面上部に赤い帯で日付と一緒に知らせ、それ以上は<b>入力できません</b>（ドラッグで移すこともできません）。すでに上限を超えて入っている場合は、超えた日数分を<b>有給や火〜木の公休などに変更してください</b>と表示されます。有給・メモ・火〜木の公休は入力できます。どうしても必要な場合はシフト作成者に相談してください。</li>'+
+      '<ul><li><b>シフト作成者からのお知らせ</b>（画面上部の「📢 シフト作成者からのお知らせ」、カレンダーに「📢 お知らせの日」）：その期間のお願いです。対象の日に希望休を入れようとすると内容が表示されます（登録はできます）。休みが必要な場合はシフト作成者と相談してください。</li>'+
+      '<li><b>月・金・土（繁忙日）の公休希望</b>：1期間に1人<b>'+PREM_KOU_MAX+'回まで</b>です。'+PREM_KOU_MAX+'回入っていると画面上部に赤い帯で日付と一緒に知らせ、それ以上は<b>入力できません</b>（ドラッグで移すこともできません）。すでに上限を超えて入っている場合は、超えた日数分を<b>有給や火〜木の公休などに変更してください</b>と表示されます。有給・メモ・火〜木の公休は入力できます。どうしても必要な場合はシフト作成者に相談してください。</li>'+
       '<li><b>希望休の提出不可日</b>（カレンダーに「提出不可」）：繁忙日などの全員出勤日です。有給・公休の希望休は出せません（メモは入れられます）。どうしても休みが必要な場合はシフト作成者に相談してください。<br><span class="hint">今の提出不可日：'+helpNrList()+'</span></li>'+
       '<li><b>勉強会の日</b>（基本は第3火曜）：希望休を入れると「勉強会の日程を調整してください」と表示されます。</li>'+
       '<li><b>経理出勤日</b>（月末の最終営業日・月初の初営業日・毎月16日のタイムカード締め）：経理の常勤（'+helpKeiri()+'）は出勤日です。カレンダーに「経理出勤日」と表示され、入力すると注意が出ます（登録はできます）。</li></ul>'+
@@ -2120,13 +2255,13 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<tr><td>● 名前 有（黄色）</td><td>シフト作成者がシフト上で入れた有給</td></tr>'+
       '<tr><td>斜線のマス</td><td>定休日（日曜）・会社休業日（全員休み）</td></tr>'+
       '<tr><td>固定（点線）</td><td>個人の固定休（パートの土曜・祝日など）</td></tr>'+
-      '<tr><td>経理出勤日／勉強会</td><td>日付の下に表示</td></tr>'+
+      '<tr><td>経理出勤日／勉強会／📢 お知らせの日</td><td>日付の下に表示</td></tr>'+
       '<tr><td>シフトタブ</td><td>公開後に、全員の勤務・休みの表が見られます（公＝公休、希・有＝希望休、黄色の有＝シフトで入れた有給、定＝定休日（日曜）、固＝個人の固定休、休＝会社休業日、空欄＝勤務）</td></tr></table>';
   }
   function helpAdmin(){
     var c=helpCfg();
     return h4(1,"シフト作成者の表示に切り替える")+
-      '<p>右上の <span class="k">あなた</span> で <b>シフト作成者（全員分を表示）</b> を選びます。全員の希望休、<span class="k">履歴</span> タブ、締切前のシフト作成が使えるようになります。</p>'+
+      '<p>右上の <span class="k">あなた</span> で <b>シフト作成者（全員分を表示）</b> を選びます。全員の希望休、<span class="k">履歴</span> タブ、<span class="k">メモ</span> タブ、締切前のシフト作成が使えるようになります。</p>'+
       h4(2,"1期間の流れ")+
       '<ol><li><b>15日（タイムカード締日）</b>：部内チャットで次の期間の希望休提出を案内。ここまでの入力が事前申請、以降が通常申請。</li>'+
       '<li><b>締切を設定</b>：期間表示の横の <span class="k">締切</span> を押して締切日を入れる（既定は期間開始月の15日）。<b>提出案内日</b>（「提出期間です」のお知らせを出し始める日）も同じ画面で設定できます（未設定なら前月16日から。案内が遅れた月だけ変更）。必要なら <span class="k">勉強会</span> の日も変更。</li>'+
@@ -2143,6 +2278,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<li>経理出勤日（月末の最終営業日・月初の初営業日・毎月16日のタイムカード締め。休みの日に当たるときは前後の営業日）は経理の2人とも出勤</li>'+
       '<li>勉強会の日には公休を入れない</li>'+
       '<li>希望休の提出不可日（全員出勤日）には公休を入れない（例外はシフト作成者が手で入れる。休みの人がいると黄色の注意）</li>'+
+      '<li>お知らせの対象日にも公休を入れない（休みの人がいると黄色の注意）</li>'+
       '<li>パートは固定休と希望休以外は出勤（自動で公休を入れない）</li>'+
       '<li>メンバーごとの「なるべく公休を入れない曜日」はできるだけ避ける</li>'+
       '<li>一人ひとりの公休が同じ曜日に偏らないようにばらす</li></ul>'+
@@ -2155,7 +2291,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<p>移動したあとに出る <span class="k">元に戻す</span> で取り消せます。表の一番下の「メンバーごとの合計」で公休・有給・出勤日数を確認できます。</p>'+
       '<p>シフト上で入れた<b>有給</b>（黄色の「有」）は、公休と同じく <span class="k">保存</span> で確定します。公休の日数には数えず、有給として数えます。<span class="k">シフト再作成</span>（全員・チーム別とも）をしても消えずに残ります。</p>'+
       h4(5,"警告と「了承済み」")+
-      '<p>警告は<b>シフトタブの表の上</b>と<b>カレンダーの下</b>（「⚠ シフトの警告 ○件」、▶で開閉）に出ます。「要対応」（赤）はルール違反、「注意」（黄）は確認が必要なものです。警告は<b>種類ごと</b>（出勤人数・経理出勤日・提出不可日・勉強会・月金土の公休希望・連勤・公休日数・週1回の公休）にまとめて、どうすればよいかと一緒に表示します。<b>保存を押す前（下書きの段階）から</b>、自動作成や手直しをするたびにすぐ更新されます。保存前に警告を確認してから <span class="k">保存</span> してください。</p>'+
+      '<p>警告は<b>シフトタブの表の上</b>と<b>カレンダーの下</b>（「⚠ シフトの警告 ○件」、▶で開閉）に出ます。「要対応」（赤）はルール違反、「注意」（黄）は確認が必要なものです。警告は<b>種類ごと</b>（出勤人数・経理出勤日・お知らせの対象日・提出不可日・勉強会・月金土の公休希望・連勤・公休日数・週1回の公休）にまとめて、どうすればよいかと一緒に表示します。<b>保存を押す前（下書きの段階）から</b>、自動作成や手直しをするたびにすぐ更新されます。保存前に警告を確認してから <span class="k">保存</span> してください。</p>'+
       '<p><b>自動作成の前</b>でも、希望休が入った時点で引っかかる点があれば「⚠ 希望休の時点での警告（自動作成前）」として出ます（受注の人数不足、経理常勤の同時休み、経理出勤日・提出不可日・勉強会の日の休み、月金土の公休希望の上限超え、公休が多すぎる人）。連勤・公休日数の不足・週1回の公休は、自動作成のあとに判定します。</p>'+
       '<p>希望休の <span class="tag adj">要調整</span>／<span class="tag judge">判断</span> は、希望休が入力された時点で判定されます（希望休は入力するとすぐ保存されます）。作成者の表示ではいつでも、メンバーには公開後に表示されます。</p>'+
       '<p>経理出勤日や勉強会の日の希望休など、承知のうえで認める場合は <span class="k">了承済みにする</span> を押すと警告が消えます。一覧の「✓了承済」の×で取り消せます。</p>'+
@@ -2165,6 +2301,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<li><b>希望休の提出不可日</b>：会社休業日と同じく <span class="k">設定</span> で日付を追加（毎年／その年だけ）。メンバーはその日に有給・公休の希望休を出せず、自動作成でも公休を入れません。例外が必要なときは、シフト作成者だけが希望休の登録やシフト上の公休・有給の入力をできます。今の設定：'+helpNrList()+'</li>'+
       '<li><span class="k">メンバー</span>：名前・チーム、固定休の曜日、祝日を固定休にするか、パートかどうか、なるべく公休を入れない曜日</li>'+
       '<li><span class="k">締切</span>・<span class="k">勉強会</span>：期間ごとに変更（その期間だけに反映）</li>'+
+      '<li><span class="k">＋ お知らせ</span>（期間表示の横）：「12/24・12/25は棚卸のため希望休を入れないでください」のような<b>お知らせ・お願いを自由に入力</b>できます。その期間を開いた全員の画面上部に表示されます。<b>対象の日</b>（任意・複数）を入れると、カレンダーに「📢 お知らせの日」の印が付き、メンバーがその日に希望休を入れようとすると内容を表示します（登録はできます）。自動作成でもその日に公休を入れず、休みの人がいれば警告に出ます。直すときはお知らせの <span class="k">編集</span>。入力そのものを止めたい日は「希望休の提出不可日」を使ってください。</li>'+
+      '<li><span class="k">メモ</span> タブ：シフト作成者だけが使える自由なメモ帳です（期間に関係なくいつでも）。追加・編集・削除・📌ピン留め（上に固定）ができます。メンバーの画面には出ませんが、共有データ（スプレッドシート）には保存されるので、見られて困る個人情報は書かないでください。</li>'+
       '<li><b>データの書き出し・読み込み</b>：<span class="k">設定</span> の <span class="k">書き出す</span> で全データを1つのファイルに保存。別のパソコンで <span class="k">読み込む</span> とそのファイルの内容に<b>置き換わります</b>（そのパソコンにあったデータは消えます）。確認用に渡すときや、バックアップに使えます。</li></ul>'+
       h4(7,"知っておいてほしいこと")+
       '<ul><li>「あなた」の名前選びは自己申告です。ログインの仕組みはありません。</li>'+
@@ -2355,6 +2493,21 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     else if(a==="co-del"){dayListDel("co",t.dataset.v);}
     else if(a==="nr-add"){dayListAdd("nr");}
     else if(a==="nr-del"){dayListDel("nr",t.dataset.v);}
+    else if(a==="notice-new"){openNotice(null);}
+    else if(a==="notice-edit"){openNotice(t.dataset.id);}
+    else if(a==="notice-close"){closeNotice();}
+    else if(a==="notice-save"){saveNotice();}
+    else if(a==="notice-del"){delNotice();}
+    else if(a==="notice-date-add"){noticeDateAdd();}
+    else if(a==="notice-date-del"){state.noticeEdit.dates=state.noticeEdit.dates.filter(function(x){return x!==t.dataset.v;});renderNoticeDates();}
+    else if(a==="memo-add"){if(isAdmin())memoAdd();}
+    else if(a==="memo-edit"){state.memoEditId=t.dataset.id;render();var me=document.getElementById("memoEdit_"+t.dataset.id);if(me){me.focus();me.setSelectionRange(me.value.length,me.value.length);}}
+    else if(a==="memo-cancel"){if(state.memoDrafts)delete state.memoDrafts[state.memoEditId];state.memoEditId=null;render();}
+    else if(a==="memo-save"){var mid3=t.dataset.id,mta=document.getElementById("memoEdit_"+mid3),mtx=mta?mta.value.trim():"";
+      if(!mtx){showToast("メモの内容を入力してください（消す場合は「削除」）",null,true);}
+      else{if(state.memoDrafts)delete state.memoDrafts[mid3];state.memoEditId=null;memoUpdate(mid3,{text:mtx,upd:Date.now()},"メモを保存しました");}}
+    else if(a==="memo-del"){var mid4=t.dataset.id;askConfirm("このメモを削除しますか？",function(){if(state.memoDrafts)delete state.memoDrafts[mid4];state.memoEditId=null;memoSaveList((state.config.adminMemos||[]).filter(function(m){return m.id!==mid4;}),"メモを削除しました");});}
+    else if(a==="memo-pin"){var pm2=(state.config.adminMemos||[]).filter(function(m){return m.id===t.dataset.id;})[0];if(pm2)memoUpdate(pm2.id,{pin:!pm2.pin});}
     else if(a==="help-open"){openHelp();}
     else if(a==="help-close"){closeHelp();}
   });
@@ -2363,6 +2516,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   document.getElementById("segApply").addEventListener("click",function(ev){var b=ev.target.closest("button");if(b&&!b.disabled)setSeg("segApply",b.dataset.v);});
   document.getElementById("fDate").addEventListener("change",checkAddNote);
   document.getElementById("memberBody").addEventListener("change",function(ev){if(ev.target.classList.contains("mwd")){ev.target.closest("label").classList.toggle("on",ev.target.checked);}});
+  // メモの書きかけを残す（同期で画面が描き直されても消えないように）
+  document.addEventListener("input",function(ev){var id=ev.target.id||"";if(id==="memoNew"||id.indexOf("memoEdit_")===0){state.memoDrafts=state.memoDrafts||{};state.memoDrafts[id==="memoNew"?"__new":id.slice(9)]=ev.target.value;}});
   document.addEventListener("input",function(ev){if(ev.target.id==="listSearch"){state.listQuery=ev.target.value;document.getElementById("main").innerHTML=viewList();var v=document.getElementById("listSearch");v.focus();v.setSelectionRange(v.value.length,v.value.length);}});
   document.addEventListener("change",function(ev){if(ev.target.id==="listFilter"){state.listFilter=ev.target.value;render();}else if(ev.target.id==="listAll"){state.listAll=ev.target.checked;render();}else if(ev.target.id==="viewerSel"){saveViewer(ev.target.value);closeDay();render();}else if(ev.target.id==="fRotStart"){renderRotEditor(ev.target.value);}else if(ev.target.id==="fMember"){checkAddNote();}else if(ev.target.id==="histSelAll"||(ev.target.classList&&ev.target.classList.contains("hsel"))){
       if(ev.target.id==="histSelAll")Array.prototype.forEach.call(document.querySelectorAll(".hsel"),function(c){c.checked=ev.target.checked;});
@@ -2374,8 +2529,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   // カレンダーの警告一覧の開閉を、画面を描き直しても保つ
   document.addEventListener("toggle",function(ev){if(ev.target.classList&&ev.target.classList.contains("calwarn"))state.calWarnClosed=!ev.target.open;},true);
   document.getElementById("segHelp").addEventListener("click",function(ev){var b=ev.target.closest("button");if(b)setHelpTab(b.dataset.v);});
-  ["addOverlay","memberOverlay","dlOverlay","setOverlay","dayOverlay","confirmOverlay","studyOverlay","ghOverlay","helpOverlay"].forEach(function(id){document.getElementById(id).addEventListener("click",function(ev){if(ev.target===this)this.classList.remove("on");});});
-  document.addEventListener("keydown",function(ev){if(ev.key==="Escape"){closeAdd();closeMembers();closeDeadline();closeSettings();closeDay();closeConfirm();closeStudy();closeGh();closeHelp();}});
+  ["addOverlay","memberOverlay","dlOverlay","setOverlay","dayOverlay","confirmOverlay","studyOverlay","ghOverlay","helpOverlay","noticeOverlay"].forEach(function(id){document.getElementById(id).addEventListener("click",function(ev){if(ev.target===this)this.classList.remove("on");});});
+  document.addEventListener("keydown",function(ev){if(ev.key==="Escape"){closeAdd();closeMembers();closeDeadline();closeSettings();closeDay();closeConfirm();closeStudy();closeGh();closeHelp();closeNotice();}});
 
   render();
   Store.init();
