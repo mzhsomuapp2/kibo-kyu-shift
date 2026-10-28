@@ -1726,6 +1726,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<span class="grow"></span><span class="hint">マスをタップで 勤務 → 公休 → 有給 → 勤務 の順に切替</span></div>';
     if(!periodFullyVisible(state.periodStart))return periodBar()+'<div class="panel"><div class="empty"><div class="big">希望休の公開前です</div>シフト表は受注の希望休が公開されてから表示されます（シフト作成者は右上「あなた」で「シフト作成者」を選ぶと作業できます）。</div></div>';
     if(!hasMembers)return periodBar()+bar+'<div class="panel"><div class="empty"><div class="big">メンバーが未登録です</div>先に「メンバー」からメンバーを登録してください。</div></div>';
+    if(!kou&&!isAdmin())return periodBar()+bar+'<div class="panel"><div class="empty"><div class="big">シフト未作成</div>シフト作成者がシフトを作成・保存すると、ここに表示されます。</div></div>';
     if(!kou)return periodBar()+bar+calWarnHtml(computeGrid(state.periodStart,{},true))+'<div class="panel"><div class="empty"><div class="big">シフト未作成</div>「自動作成」を押すと、定休日（日曜）・個別の固定休・登録済みの希望休を反映し、6連勤にならないよう自動で公休を割り当てます。</div></div>';
     var g=computeGrid(state.periodStart,kou),days=g.days,cfg=g.cfg;
     var head='<tr><th class="name">メンバー</th>'+days.map(function(d){var cl=(d.getDay()===0||isCompanyOff(ymd(d)))?"sun":(isPremium(d)?"prem":"");var hn=isCompanyOff(ymd(d))?"会社休業日":holiday(ymd(d));var isSt=g.studyKey&&ymd(d)===g.studyKey;return '<th class="'+cl+'"><span class="d">'+d.getDate()+'</span><br>'+WD[d.getDay()]+(hn?'<span class="hn" title="'+esc(hn)+'">'+esc(hn)+'</span>':'')+(isSt?'<span class="hn" style="color:var(--accent)">勉強会</span>':'')+(isNoReqDay(ymd(d))?'<span class="hn" style="color:var(--danger-ink);font-weight:800" title="希望休の提出不可日（全員出勤日）">⛔不可</span>':'')+'</th>';}).join("")+'<th class="koucol">公休</th></tr>';
@@ -1794,12 +1795,14 @@ body.dragging,body.dragging *{cursor:grabbing!important}
 
   // 自動作成ボタン：全員／受注だけ／経理だけ
   function genButtons(enabled,kou){
+    if(!isAdmin())return ''; // 自動作成はシフト作成者だけ（メンバーには公開後もボタンを出さない）
     var dis=enabled?'':' disabled';
     return '<button class="btn primary" data-act="shift-gen"'+dis+'>'+(kou?'シフト再作成（全員）':'シフト自動作成（全員）')+'</button>'+
       '<button class="btn" data-act="shift-gen" data-team="受注"'+dis+' title="受注チームの公休だけを作り直します（経理はそのまま）">受注だけ作成</button>'+
       '<button class="btn" data-act="shift-gen" data-team="経理"'+dis+' title="経理チームの公休だけを作り直します（受注はそのまま）">経理だけ作成</button>';
   }
   function shiftGenerate(team){
+    if(!isAdmin())return;
     var doGen=function(){state.shiftDraft=generateShift(state.periodStart,team||null);state.shiftDraftKey=periodKey(state.periodStart);render();
       if(team)showToast(team+"チームの公休を作り直しました（"+(team==="受注"?"経理":"受注")+"はそのまま）。「保存」で確定します");};
     var other=team==="受注"?"経理":"受注";
@@ -2319,6 +2322,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<li><b>データの書き出し・読み込み</b>：<span class="k">設定</span> の <span class="k">書き出す</span> で全データを1つのファイルに保存。別のパソコンで <span class="k">読み込む</span> とそのファイルの内容に<b>置き換わります</b>（そのパソコンにあったデータは消えます）。確認用に渡すときや、バックアップに使えます。</li></ul>'+
       h4(7,"知っておいてほしいこと")+
       '<ul><li>「あなた」の名前選びは自己申告です。ログインの仕組みはありません。</li>'+
+      '<li>シフトの自動作成ボタン（全員／受注だけ／経理だけ）は、シフト作成者の表示にだけ出ます（メンバーには公開後・シフト保存後も出ません）。</li>'+
       '<li>公開後は、メンバーもシフト表を開いて公休を切り替え・保存できる状態です。</li>'+
       '<li>データの保存先は右上の表示で確認できます。<b>全員で共有中（スプレッドシート）</b>＝GAS経由で全員のデータが同じ（入力は数秒で保存、ほかの人の画面には15秒ほどで反映）。<b>この端末に保存</b>＝このパソコンのブラウザだけ。</li>'+
       '<li>共有中のデータはスプレッドシートの「希望休一覧」シートでも確認できます（見る用。ここを書き換えてもアプリには反映されません）。</li>'+
