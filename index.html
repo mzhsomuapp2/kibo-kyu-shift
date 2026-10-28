@@ -169,6 +169,8 @@ header.app{display:flex; align-items:flex-end; justify-content:space-between; ga
 .chips{margin-top:5px; display:flex; flex-direction:column; gap:3px}
 .chip{display:flex; align-items:center; gap:4px; font-size:11.5px; font-weight:600; line-height:1.35; padding:2px 6px; border-radius:6px; max-width:100%}
 .chip .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.chip.own{cursor:pointer}
+.chip.own:hover{filter:brightness(.95); box-shadow:0 0 0 2px var(--accent)}
 .chip.uke.paid{background:var(--uke-fill); color:var(--uke-ink)}
 .chip.uke.off{background:transparent; border:1px solid var(--uke-line); color:var(--uke-ink)}
 .chip.kei.paid{background:var(--kei-fill); color:var(--kei-ink)}
@@ -1240,10 +1242,13 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<button class="btn primary" data-act="add-open"'+(state.storeReady?'':' disabled')+'>＋ 希望休を追加</button></div></div>';
   }
 
+  // 自分の希望休・メモはタップで入力画面（変更・削除）を開く（締切後は openEdit が案内を出す）
+  function chipTap(r){return isOwn(r)&&!isAdmin();}
+  // チップの属性：ドラッグ（編集できるとき）＋タップで編集（自分のもの）
+  function chipAttrs(r){var a=(canEdit(r)?' data-drag="req"':'')+(chipTap(r)?' data-act="req-edit"':'');return a?a+' data-id="'+esc(r.id)+'"':'';}
   function chipHtml(r,conf){
     if(isMemo(r)){
-      var mdrag=canEdit(r)?' data-drag="req" data-id="'+esc(r.id)+'"':'';
-      return '<div class="chip memochip" title="'+esc(r.name)+' 勤務メモ（出勤）\n'+esc(r.note||"")+'"'+mdrag+'><span class="pre memo">メモ</span><span class="nm">'+esc(r.name)+' '+esc(r.note||"")+'</span></div>';
+      return '<div class="chip memochip'+(chipTap(r)?' own':'')+'" title="'+esc(r.name)+' 勤務メモ（出勤）\n'+esc(r.note||"")+(chipTap(r)?'\nタップで変更・削除':'')+'"'+chipAttrs(r)+'><span class="pre memo">メモ</span><span class="nm">'+esc(r.name)+' '+esc(r.note||"")+'</span></div>';
     }
     var tk=tkey(r.team),lv=r.leave==="有給"?"paid":"off";
     var pre=r.apply==="事前"?'<span class="pre">事前</span>':'<span class="pre norm">通常</span>';
@@ -1252,8 +1257,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var ackKeys=Object.keys(r.acks||{}).filter(function(k){return r.acks[k];});
     if(ackKeys.length)flag+='<span class="memo" title="シフト作成者が了承済み">✓</span>';
     var tip=esc(r.name)+"・"+esc(r.team)+"・"+esc(r.leave)+"・"+esc(r.apply)+"申請"+(r.note?"\n備考: "+esc(r.note):"")+(conf?"\n"+esc(conf.text):"")+(ackKeys.length?"\n✓了承済み（"+ackKeys.map(function(k){return ACK_LABEL[k]||k;}).join("・")+"）":"");
-    var drag=canEdit(r)?' data-drag="req" data-id="'+esc(r.id)+'"':'';
-    return '<div class="chip '+tk+' '+lv+(conf?" "+conf.kind:"")+'" title="'+tip+'"'+drag+'>'+pre+'<span class="nm">'+esc(r.name)+'</span>'+memo+flag+'</div>';
+    if(chipTap(r))tip+="\nタップで変更・削除";
+    return '<div class="chip '+tk+' '+lv+(conf?" "+conf.kind:"")+(chipTap(r)?' own':'')+'" title="'+tip+'"'+chipAttrs(r)+'>'+pre+'<span class="nm">'+esc(r.name)+'</span>'+memo+flag+'</div>';
   }
 
   function viewCalendar(){
@@ -2232,7 +2237,9 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<li>締切の'+DEADLINE_ALERT_DAYS+'日前からは画面上部に「締切まであと○日」（黄色）、当日は「本日が締切」（赤）と表示されます。</li>'+
       '<li><b>経理チームの希望休</b>は、いつでも全員に見えます。</li></ul>'+
       h4(5,"修正・削除")+
-      '<ul><li>締切までは、自分の希望休を <span class="k">一覧</span> やカレンダーから編集・削除できます。一覧は<b>日付の新しい順</b>に並んでいます（チームや区分で絞り込み可）。</li>'+
+      '<ul><li>締切までは、自分の希望休を <span class="k">一覧</span> やカレンダーから編集・削除できます。</li>'+
+      '<li><b>カレンダー</b>：自分の希望休（メモも）を<b>タップ</b>すると入力画面が開きます。日付や区分を直して <span class="k">保存</span>、消すときは <span class="k">削除</span>。</li>'+
+      '<li><b>一覧</b>：各希望休の <span class="k">編集</span>／<span class="k">削除</span> から。<b>日付の新しい順</b>に並んでいます（チームや区分で絞り込み可）。</li>'+
       '<li>カレンダーの自分の希望休を<b>ドラッグ</b>すると、別の日に移せます（スマホは少し長押ししてから動かす）。</li>'+
       '<li>締切後の変更は、シフト作成者に依頼してください。</li></ul>'+
       h4(6,"希望休が重なったとき")+
