@@ -601,6 +601,14 @@ body.dragging,body.dragging *{cursor:grabbing!important}
         <div class="note" id="fNrNote"></div>
         <p class="hint" style="margin:6px 0 0">この日はメンバーが有給・公休の希望休を出せず、自動作成でも公休を入れません（繁忙日など）。例外が必要なときは、シフト作成者だけが手で休みを入れられます。メモは誰でも入れられます。</p>
       </div>
+      <div class="field"><label for="fPoDate">パートの休業日（パートだけ休み）</label>
+        <div id="fPoList" class="colist"></div>
+        <div class="rotrow" style="margin-top:8px;flex-wrap:wrap"><input type="date" id="fPoDate" style="flex:1;min-width:150px;font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface-2);color:var(--ink)">
+          <label class="chkrow" style="font-size:13px"><input type="checkbox" id="fPoYearly" checked> 毎年</label>
+          <button type="button" class="btn sm" data-act="po-add">追加</button></div>
+        <div class="note" id="fPoNote"></div>
+        <p class="hint" style="margin:6px 0 0">パートの人だけ、固定休と同じ扱いで休みになります（例：年末は12/29から休み。12/31〜1/3は会社休業日で全員休み）。常勤の人には影響しません。</p>
+      </div>
       <div class="field"><label for="fRotStart">受注の優先順位（ローテーション）</label>
         <div class="rotedit">
           <div class="rotrow"><span class="hint">この期間から</span><select id="fRotStart"></select></div>
@@ -1053,7 +1061,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
 
   function reqByDate(){var m={};visibleRequests().forEach(function(r){(m[r.date]=m[r.date]||[]).push(r);});return m;}
   function membersByTeam(){var g={"受注":[],"経理":[]};state.members.forEach(function(m){(g[m.team]=g[m.team]||[]).push(m);});return g;}
-  function memberOffOn(m,date,key){var wd=date.getDay();if(wd===0)return false;if((m.offWeekdays||[]).indexOf(wd)>=0)return true;if(m.offHolidays&&holiday(key))return true;return false;}
+  function memberOffOn(m,date,key){var wd=date.getDay();if(wd===0)return false;if(isPart(m)&&isPartOff(key))return true;if((m.offWeekdays||[]).indexOf(wd)>=0)return true;if(m.offHolidays&&holiday(key))return true;return false;}
   function offSummary(m){var ex=(m.offWeekdays||[]).slice().sort().map(function(n){return WD[n];});if(m.offHolidays)ex.push("祝");var av=(m.avoidWeekdays||[]).slice().sort().map(function(n){return WD[n];});return (ex.length?"固定休: "+ex.join("・"):"固定休なし（定休日の日曜のみ）")+(m.partTime?"　/　パート":"")+(av.length?"　/　公休を避けたい曜日: "+av.join("・"):"");}
 
   function render(){
@@ -1465,6 +1473,11 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function noReqList(){var l=state.config.noReqDays;return Array.isArray(l)?l:[];}
   function isNoReqDay(key){var l=noReqList();return l.indexOf(key.slice(5))>=0||l.indexOf(key)>=0;}
   function isCompanyOff(key){var l=companyOffList();return (l.indexOf(key.slice(5))>=0||l.indexOf(key)>=0)&&parseYmd(key).getDay()!==0;}
+  // パートの休業日（パートだけ休み・固定休扱い）：config.partOffDays（"MM-DD"＝毎年／"YYYY-MM-DD"＝その年だけ）。未設定なら年末 12/29・12/30
+  var PART_OFF_DEFAULT=["12-29","12-30"];
+  function partOffList(){var l=state.config.partOffDays;return Array.isArray(l)?l:PART_OFF_DEFAULT;}
+  function isPartOff(key){var l=partOffList();return l.indexOf(key.slice(5))>=0||l.indexOf(key)>=0;}
+  function helpPoList(){var l=sortCompanyOff(partOffList());return l.length?l.map(function(v){return esc(companyOffLabel(v));}).join("、"):"なし";}
   function isFixedOff(m,d,key){if(state.config.sundayFixed&&d.getDay()===0)return true;return memberOffOn(m,d,key);}
   function sortedMembers(){return state.members.slice().sort(function(a,b){var ta=TEAM_ORDER.indexOf(a.team),tb=TEAM_ORDER.indexOf(b.team);if(ta!==tb)return ta-tb;return (a.order||0)-(b.order||0);});}
   function reqMap(){var by={};state.members.forEach(function(m){by[m.id]={};});offRequests().forEach(function(r){var m=(r.memberId&&state.members.filter(function(x){return x.id===r.memberId;})[0])||state.members.filter(function(x){return x.name===r.name;})[0];if(m)by[m.id][r.date]=r;});return by;}
@@ -2159,7 +2172,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   }
 
   /* ---- settings ---- */
-  function openSettings(){var c=state.config;document.getElementById("fThresh").value=c.threshold||2;document.getElementById("fSunday").checked=!!c.sundayFixed;document.getElementById("fUkeMin").value=c.ukeMin!=null?c.ukeMin:2;document.getElementById("fUkeTarget").value=c.ukeTarget!=null?c.ukeTarget:3;document.getElementById("fWeekendTarget").value=c.weekendTarget!=null?c.weekendTarget:3;document.getElementById("fMaxConsec").value=c.maxConsec!=null?c.maxConsec:5;document.getElementById("fKouTarget").value=c.kouTarget!=null?c.kouTarget:9;var sk=periodKey(state.periodStart);renderRotEditor(sk>=RULES_FROM?sk:RULES_FROM);state.coDraft=companyOffList().slice();renderCoList();state.nrDraft=noReqList().slice();renderDayList("nr");document.getElementById("fNrNote").classList.remove("on");
+  function openSettings(){var c=state.config;document.getElementById("fThresh").value=c.threshold||2;document.getElementById("fSunday").checked=!!c.sundayFixed;document.getElementById("fUkeMin").value=c.ukeMin!=null?c.ukeMin:2;document.getElementById("fUkeTarget").value=c.ukeTarget!=null?c.ukeTarget:3;document.getElementById("fWeekendTarget").value=c.weekendTarget!=null?c.weekendTarget:3;document.getElementById("fMaxConsec").value=c.maxConsec!=null?c.maxConsec:5;document.getElementById("fKouTarget").value=c.kouTarget!=null?c.kouTarget:9;var sk=periodKey(state.periodStart);renderRotEditor(sk>=RULES_FROM?sk:RULES_FROM);state.coDraft=companyOffList().slice();renderCoList();state.nrDraft=noReqList().slice();renderDayList("nr");document.getElementById("fNrNote").classList.remove("on");state.poDraft=partOffList().slice();renderDayList("po");document.getElementById("fPoNote").classList.remove("on");
     document.getElementById("fGasUrl").value=gasUrlLocal();document.getElementById("fGasUrl").disabled=!!GAS_URL;
     document.getElementById("fGasHint").textContent=GAS_URL?"このファイルにはGASのURLが設定済みです（全員で共有）。":"空欄ならこのパソコンに保存します。URLを入れて「接続」を押すと、このパソコンだけGAS（スプレッドシート）に保存します。";document.getElementById("fCoNote").classList.remove("on");document.getElementById("setOverlay").classList.add("on");}
   /* ---- データの書き出し・読み込み（確認用に別のパソコンへ渡す） ---- */
@@ -2187,7 +2200,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
 
   /* ---- 日付リストの編集（設定画面。「保存」で反映）：会社休業日 co ／ 希望休の提出不可日 nr ---- */
   // kind ごとの部品：fCoList/fCoDate/fCoYearly/fCoNote・state.coDraft、fNrList/…・state.nrDraft
-  function dlIds(kind){var K=kind==="co"?"Co":"Nr";return {list:"f"+K+"List",date:"f"+K+"Date",yearly:"f"+K+"Yearly",note:"f"+K+"Note",draft:kind+"Draft"};}
+  function dlIds(kind){var K={co:"Co",nr:"Nr",po:"Po"}[kind];return {list:"f"+K+"List",date:"f"+K+"Date",yearly:"f"+K+"Yearly",note:"f"+K+"Note",draft:kind+"Draft"};}
   function renderDayList(kind){
     var ids=dlIds(kind),l=sortCompanyOff(state[ids.draft]||[]);
     document.getElementById(ids.list).innerHTML=l.length?l.map(function(v){return '<span class="co">'+esc(companyOffLabel(v))+'<button type="button" data-act="'+kind+'-del" data-v="'+esc(v)+'" aria-label="'+esc(companyOffLabel(v))+'を削除">×</button></span>';}).join(""):'<span class="hint">（なし）</span>';
@@ -2273,7 +2286,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   async function saveSettings(){
     var th=numv("fThresh",2,2,20),rc=rotConfig();
     if(rc.error){document.getElementById("fRotNote").scrollIntoView({block:"nearest"});return;}
-    var cfg=Object.assign({},state.config,{rotations:rc.rotations,companyOff:sortCompanyOff(state.coDraft||companyOffList()),noReqDays:sortCompanyOff(state.nrDraft||noReqList()),threshold:th,sundayFixed:document.getElementById("fSunday").checked,
+    var cfg=Object.assign({},state.config,{rotations:rc.rotations,companyOff:sortCompanyOff(state.coDraft||companyOffList()),noReqDays:sortCompanyOff(state.nrDraft||noReqList()),partOffDays:sortCompanyOff(state.poDraft||partOffList()),threshold:th,sundayFixed:document.getElementById("fSunday").checked,
       ukeMin:numv("fUkeMin",2,0,10),ukeTarget:numv("fUkeTarget",3,0,10),weekendTarget:numv("fWeekendTarget",3,0,10),maxConsec:numv("fMaxConsec",5,1,13),kouTarget:numv("fKouTarget",9,0,20)});
     try{await Store.saveConfig(cfg);closeSettings();}catch(e){}
   }
@@ -2343,7 +2356,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<tr><td>● 名前 公</td><td>シフト作成で入った公休</td></tr>'+
       '<tr><td>● 名前 有（黄色）</td><td>シフト作成者がシフト上で入れた有給</td></tr>'+
       '<tr><td>斜線のマス</td><td>定休日（日曜）・会社休業日（全員休み）</td></tr>'+
-      '<tr><td>固定（点線）</td><td>個人の固定休（パートの土曜・祝日など）</td></tr>'+
+      '<tr><td>固定（点線）</td><td>個人の固定休（パートの土曜・祝日など）。パートの休業日（'+helpPoList()+'）もパートの人は固定休になります</td></tr>'+
       '<tr><td>経理出勤日／勉強会／📢 お知らせの日</td><td>日付の下に表示</td></tr>'+
       '<tr><td>シフトタブ</td><td>公開後に、全員の勤務・休みの表が見られます（公＝公休、希・有＝希望休、黄色の有＝シフトで入れた有給、定＝定休日（日曜）、固＝個人の固定休、休＝会社休業日、空欄＝勤務）</td></tr></table>';
   }
@@ -2388,6 +2401,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<ul><li><span class="k">設定</span>：被り警告の人数、受注の人数、連勤の上限、公休日数、日曜の扱い、<b>会社休業日</b>の追加・削除、<b>受注の優先順位（ローテーション）</b>の編集</li>'+
       '<li><b>会社休業日</b>：<span class="k">設定</span> で日付を選んで <span class="k">追加</span> → <span class="k">保存</span>。「毎年」にチェックすると毎年同じ日（お盆・年末年始など）、外すとその年だけ。全員休みになり、公休には数えません（公休'+c.kouTarget+'日・週1公休は別に入ります）。今の設定：'+helpCoList()+'</li>'+
       '<li><b>希望休の提出不可日</b>：会社休業日と同じく <span class="k">設定</span> で日付を追加（毎年／その年だけ）。メンバーはその日に有給・公休の希望休を出せず、自動作成でも公休を入れません。例外が必要なときは、シフト作成者だけが希望休の登録やシフト上の公休・有給の入力をできます。今の設定：'+helpNrList()+'</li>'+
+      '<li><b>パートの休業日</b>：<span class="k">設定</span> で日付を追加（毎年／その年だけ）。パートの人だけ固定休と同じ扱いで休みになります（年末は12/29から休み、など）。常勤の人には影響しません。今の設定：'+helpPoList()+'</li>'+
       '<li><span class="k">メンバー</span>：名前・チーム、固定休の曜日、祝日を固定休にするか、パートかどうか、なるべく公休を入れない曜日</li>'+
       '<li><span class="k">締切</span>・<span class="k">勉強会</span>：期間ごとに変更（その期間だけに反映）</li>'+
       '<li><span class="k">＋ お知らせ</span>（期間表示の横）：「12/24・12/25は棚卸のため希望休を入れないでください」のような<b>お知らせ・お願いを自由に入力</b>できます。その期間を開いた全員の画面上部に表示されます。<b>対象の日</b>（任意・複数）を入れると、カレンダーに「📢 お知らせの日」の印が付き、メンバーがその日に希望休を入れようとすると内容を表示します（登録はできます）。自動作成でもその日に公休を入れず、休みの人がいれば警告に出ます。直すときはお知らせの <span class="k">編集</span>。入力そのものを止めたい日は「希望休の提出不可日」を使ってください。</li>'+
@@ -2583,6 +2597,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     else if(a==="co-add"){dayListAdd("co");}
     else if(a==="co-del"){dayListDel("co",t.dataset.v);}
     else if(a==="nr-add"){dayListAdd("nr");}
+    else if(a==="po-add"){dayListAdd("po");}
+    else if(a==="po-del"){dayListDel("po",t.dataset.v);}
     else if(a==="nr-del"){dayListDel("nr",t.dataset.v);}
     else if(a==="notice-new"){openNotice(null);}
     else if(a==="notice-edit"){openNotice(t.dataset.id);}
