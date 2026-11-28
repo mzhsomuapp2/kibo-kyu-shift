@@ -108,6 +108,9 @@ header.app{display:flex; align-items:flex-end; justify-content:space-between; ga
 .wgc{font-size:12px;font-weight:700;color:var(--ink-soft)}
 .wgd{font-size:12px;color:var(--ink-soft);margin:2px 0 6px}
 .wgrp .warnitem{padding:6px 10px;margin-top:5px}
+.wacked{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.wacked summary{cursor:pointer;font-size:13px;font-weight:800;color:var(--accent)}
+.warnitem.ok{background:var(--surface-2);color:var(--ink-soft);border-color:var(--line);padding:6px 10px;margin-top:5px}
 .submitbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:13.5px;padding:10px 14px;border-radius:10px;margin-bottom:12px;background:var(--accent-weak);color:var(--accent);border:1px solid var(--accent)}
 .submitbar>span{flex:1;min-width:200px}
 .submitbar .avoidnote{flex-basis:100%;font-size:12.5px;color:var(--ink-soft);border-top:1px dashed var(--accent);padding-top:7px;line-height:1.7}
@@ -295,6 +298,7 @@ tbody tr:hover{background:var(--surface-2)}
 .shiftgrid tbody td.cell.rq.uke{background:var(--uke-fill);color:var(--uke-ink)}
 .shiftgrid tbody td.cell.rq.kei{background:var(--kei-fill);color:var(--kei-ink)}
 .shiftgrid tbody td.cell.ko{background:var(--accent-weak);color:var(--accent)}
+.shiftgrid tbody td.cell.ko.sunko{cursor:default;opacity:.75}
 .shiftgrid tbody td.cell.yu{background:var(--warn-bg);color:var(--warn-ink);box-shadow:inset 0 0 0 1px var(--warn-line)}
 .daystat.yu{background:var(--warn-bg);color:var(--warn-ink)}
 /* 日付エディタの切替ボタン：公休＝緑、有給＝黄（シフト表の「公」「有」と同じ色） */
@@ -584,7 +588,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
           <div><label class="hint" for="fKouTarget" style="display:block;margin-bottom:4px">公休日数/期間（日曜含む）</label><input type="number" id="fKouTarget" min="0" max="20" step="1"></div>
         </div>
       </div>
-      <div class="field"><label>日曜日</label><label class="chkrow"><input type="checkbox" id="fSunday"> 日曜を全員の定休日にする</label></div>
+      <div class="field"><label>日曜日</label><label class="chkrow"><input type="checkbox" id="fSunday"> 日曜を全員の公休にする</label></div>
       <div class="field"><label for="fCoDate">会社休業日（全員休み・公休には数えない）</label>
         <div id="fCoList" class="colist"></div>
         <div class="rotrow" style="margin-top:8px;flex-wrap:wrap"><input type="date" id="fCoDate" style="flex:1;min-width:150px;font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface-2);color:var(--ink)">
@@ -865,7 +869,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     function toArr(m){return Object.keys(m||{}).map(function(k){return m[k];});}
     function mergeShifts(anc,ours,theirs){var arr=mergeCol(toArr(anc),toArr(ours),toArr(theirs)),out={};arr.forEach(function(v){out[v.id]=v;});return out;}
     // 設定のうち、お知らせ（notices）と作成者メモ（adminMemos）は1件ずつ合わせる（同時に書いても消えないように）
-    var CFG_LISTS=["notices","adminMemos"];
+    var CFG_LISTS=["notices","adminMemos","warnAcks"];
     function cfgStrip(c){var o=Object.assign({},DEF,c);CFG_LISTS.forEach(function(k){delete o[k];});return o;}
     function cfgEq(a,b){return JSON.stringify(cfgStrip(a))===JSON.stringify(cfgStrip(b));}
     function mergeCfg(anc,ours,theirs){
@@ -1062,7 +1066,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function reqByDate(){var m={};visibleRequests().forEach(function(r){(m[r.date]=m[r.date]||[]).push(r);});return m;}
   function membersByTeam(){var g={"受注":[],"経理":[]};state.members.forEach(function(m){(g[m.team]=g[m.team]||[]).push(m);});return g;}
   function memberOffOn(m,date,key){var wd=date.getDay();if(wd===0)return false;if(isPart(m)&&isPartOff(key))return true;if((m.offWeekdays||[]).indexOf(wd)>=0)return true;if(m.offHolidays&&holiday(key))return true;return false;}
-  function offSummary(m){var ex=(m.offWeekdays||[]).slice().sort().map(function(n){return WD[n];});if(m.offHolidays)ex.push("祝");var av=(m.avoidWeekdays||[]).slice().sort().map(function(n){return WD[n];});return (ex.length?"固定休: "+ex.join("・"):"固定休なし（定休日の日曜のみ）")+(m.partTime?"　/　パート":"")+(av.length?"　/　公休を避けたい曜日: "+av.join("・"):"");}
+  function offSummary(m){var ex=(m.offWeekdays||[]).slice().sort().map(function(n){return WD[n];});if(m.offHolidays)ex.push("祝");var av=(m.avoidWeekdays||[]).slice().sort().map(function(n){return WD[n];});return (ex.length?"固定休: "+ex.join("・"):"固定休なし（日曜の公休のみ）")+(m.partTime?"　/　パート":"")+(av.length?"　/　公休を避けたい曜日: "+av.join("・"):"");}
 
   function render(){
     var st=document.getElementById("status");st.setAttribute("data-mode",state.storeMode);
@@ -1319,7 +1323,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       var dlFor=deadlineForDays[key];
       if(dlFor)studyHtml+='<div class="holname dlmark" title="'+esc(periodLabel(dlFor))+' の希望休の締切日">'+(dlFor.getMonth()+1)+'/16〜 希望休締切</div>';
       var inner;
-      if(isSun){inner='<div class="dnum">'+d.getDate()+mtag+'</div>'+todayDot+'<div class="sun-label">'+(coOff?'会社休業日':'定休日')+'</div>'+(deadlineForDays[key]?'<div class="holname dlmark" style="margin-top:6px" title="'+esc(periodLabel(deadlineForDays[key]))+' の希望休の締切日">'+(deadlineForDays[key].getMonth()+1)+'/16〜 希望休締切</div>':'');}
+      if(isSun){inner='<div class="dnum">'+d.getDate()+mtag+'</div>'+todayDot+'<div class="sun-label">'+(coOff?'会社休業日':'公休（日曜）')+'</div>'+(deadlineForDays[key]?'<div class="holname dlmark" style="margin-top:6px" title="'+esc(periodLabel(deadlineForDays[key]))+' の希望休の締切日">'+(deadlineForDays[key].getMonth()+1)+'/16〜 希望休締切</div>':'');}
       else{
         var cnt=count>=th?'<span class="cnt">'+count+'</span>':'';
         var chips=reqs.map(function(r){return chipHtml(r,cmap[r.id]);}).join("");
@@ -1348,7 +1352,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       genButtons(state.members.length>0,kou)+
       (draft?'<button class="btn" data-act="shift-save">保存</button><button class="btn ghost" data-act="shift-discard">取消</button>':'')+
       badge+'<span class="grow"></span>'+
-      '<span class="hint">'+(kou?'日付をタップして各人の勤務/公休/有給を調整':'自動作成で公休を割り当て（希望休・定休日・固定休は反映）')+'</span></div>';
+      '<span class="hint">'+(kou?'日付をタップして各人の勤務/公休/有給を調整':'自動作成で公休を割り当て（希望休・日曜の公休・固定休は反映）')+'</span></div>';
     if(!full)shiftCtrl='<div class="shiftbar"><span class="hint">日付をタップすると希望休を入力できます。'+(state.viewer?'':'先に右上の「あなた」で自分の名前を選んでください。')+'</span></div>';
     var legend='<div class="legend">'+
       '<span><i class="sw uke"></i>受注</span><span><i class="sw kei"></i>経理</span>'+
@@ -1356,7 +1360,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<span><i class="sw" style="background:var(--accent-weak);border-color:var(--accent)"></i>公＝シフトの公休</span>'+
       '<span><i class="sw" style="background:var(--warn-bg);border-color:var(--warn-line)"></i>有＝シフトで入れた有給</span>'+
       '<span><i class="sw warn"></i>'+(state.config.threshold||2)+'人以上の被り</span>'+
-      '<span><i class="sw sun"></i>定休日（日曜）・会社休業日</span><span>点線＝個人の固定休</span>'+
+      '<span><i class="sw sun"></i>日曜の公休・会社休業日</span><span>点線＝個人の固定休</span>'+
       '<span><b style="color:#fff;background:var(--danger-ink);border-radius:4px;padding:0 5px;font-size:10.5px">⛔ 提出不可</b>＝希望休の提出不可日（全員出勤日）</span>'+
       '<span>希望休・公はドラッグで別の日へ移動（スマホは長押ししてから）</span>'+
       (newRules(s)?'<span><span class="tag adj">要調整</span>順位・事前により調整が必要</span><span><span class="tag judge">判断</span>作成者が判断</span>':'')+'</div>';
@@ -1375,7 +1379,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     });
     return '<div class="summary"><h4>メンバーごとの合計（'+esc(periodLabel(state.periodStart))+'）</h4><div class="panel"><table>'+
       '<thead><tr><th>メンバー</th><th class="num">公休</th><th class="num">有給</th><th class="num">出勤</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
-      '<p class="hint" style="margin:6px 0 0">公休＝定休日（日曜）・固定休・公休の希望休・自動の公休の合計（目標'+cfg.kouTarget+'日）。有給は公休とは別に数えます。</p></div>';
+      '<p class="hint" style="margin:6px 0 0">公休＝日曜の公休・固定休・公休の希望休・自動の公休の合計（目標'+cfg.kouTarget+'日）。有給は公休とは別に数えます。</p></div>';
   }
   // 重なり一覧（公開後／作成者表示のみ）
   function conflictPanel(s,cmap){
@@ -1539,6 +1543,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function avoidsDay(m,d){return (m.avoidWeekdays||[]).indexOf(d.getDay())>=0;}
   // 週1公休は月〜土を1週として判定（日曜は全員固定休なので別扱い）
   function weekMonOf(d){var x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-((x.getDay()+6)%7));return x;}
+  // 会社休業日（年末年始など）を含む週は、週1公休の対象外（全員出勤の時期で、休業日で休めるため）
+  function weekHasCompanyOff(mon){return weekMonSat(mon).some(function(d){return isCompanyOff(ymd(d));});}
   function weekMonSat(mon){var out=[];for(var k=0;k<6;k++)out.push(new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+k));return out;}
   function kouGlobal(mid,key){var ps=periodStartForDate(parseYmd(key)),pk=periodKey(ps);var kou=(state.shiftDraftKey===pk?state.shiftDraft:null)||(state.shifts[pk]&&state.shifts[pk].kou);return !!(kou&&kou[mid]&&kou[mid].indexOf(key)>=0);}
   function reqOnDate(m,key){return offRequests().filter(function(x){return x.date===key&&((x.memberId&&x.memberId===m.id)||x.name===m.name);})[0];}
@@ -1606,7 +1612,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
           else if(!periodHasShift(periodStartForDate(d)))known=false;
           else if(isKouDay(m,d,key))has=true;
         });
-        if(has||!known)return;
+        if(has||!known||weekHasCompanyOff(parseYmd(k)))return;
         var best=-1,bs=-1e9;
         idx.forEach(function(i){if(!eligible(m,i))return;if(m.team==="経理"&&keiNonPartOff(i,m.id)>=1)return;var sc=scoreAt(m,i);if(sc>bs){bs=sc;best=i;}});
         if(best>=0){st[m.id][best]="K";need[m.id]--;}
@@ -1700,13 +1706,13 @@ body.dragging,body.dragging *{cursor:grabbing!important}
         if(cl.t==="rq"&&isAcked(cl.req,"edge"))return;
         warnings.push({cat:"edge",err:true,text:md+" は"+keiriDayWhy(ymd(d))+"のため経理出勤日です："+m.name+"さんが"+(cl.t==="rq"?cl.leave+"の希望休":cl.t==="ko"?"公休":cl.t==="yu"?"有給":"休み"),acks:cl.t==="rq"?[{r:cl.req,kind:"edge"}]:[]});
       });
-      // 希望休の提出不可日（全員出勤日）に休みの人（固定休・定休日・休業日は除く。了承済みの希望休も除く）
+      // 希望休の提出不可日（全員出勤日）に休みの人（固定休・日曜の公休・休業日は除く。了承済みの希望休も除く）
       if(isNoReqDay(ymd(d))&&!c.isSun)members.forEach(function(m){
         var cl=rowOf(m.id).cells[i];if(cl.t==="wk"||cl.t==="fx"||cl.t==="co")return;
         if(cl.t==="rq"&&isAcked(cl.req,"noreq"))return;
         warnings.push({cat:"noreq",err:false,text:md+" は希望休の提出不可日（全員出勤日）です："+m.name+"さんが"+(cl.t==="rq"?cl.leave+"の希望休":cl.t==="ko"?"公休":cl.t==="yu"?"有給":"休み"),acks:cl.t==="rq"?[{r:cl.req,kind:"noreq"}]:[]});
       });
-      // シフト作成者からのお知らせの対象日に休みの人（固定休・定休日・休業日は除く。了承済みの希望休も除く）
+      // シフト作成者からのお知らせの対象日に休みの人（固定休・日曜の公休・休業日は除く。了承済みの希望休も除く）
       var nts=c.isSun?[]:noticesOn(ymd(d));
       if(nts.length)members.forEach(function(m){
         var cl=rowOf(m.id).cells[i];if(cl.t==="wk"||cl.t==="fx"||cl.t==="co")return;
@@ -1723,7 +1729,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     rows.forEach(function(r){
       if(!r.part){
         if(r.kou<cfg.kouTarget){if(!pre)warnings.push({cat:"kou",err:true,text:r.m.name+"さんの公休が"+r.kou+"日（目標"+cfg.kouTarget+"日・日曜含む）"});}
-        else if(r.kou>cfg.kouTarget)warnings.push({cat:"kou",err:false,text:r.m.name+"さんの公休が"+r.kou+"日（目標"+cfg.kouTarget+"日）※多い"+(pre?"（定休日・固定休・公休希望だけで超えています）":"")});
+        else if(r.kou>cfg.kouTarget)warnings.push({cat:"kou",err:false,text:r.m.name+"さんの公休が"+r.kou+"日（目標"+cfg.kouTarget+"日）※多い"+(pre?"（日曜の公休・固定休・公休希望だけで超えています）":"")});
       }
       if(r.premReq>PREM_KOU_MAX)warnings.push({cat:"prem",err:false,text:r.m.name+"さんの月・金・土の公休希望が"+r.premReq+"回（上限"+PREM_KOU_MAX+"回）"});
     });
@@ -1735,12 +1741,23 @@ body.dragging,body.dragging *{cursor:grabbing!important}
         if(d.getDay()===0)return;var mon=weekMonOf(d),wk=ymd(mon);if(seenW[wk])return;seenW[wk]=1;
         var kN=0,yN=0,known=true,wd=weekMonSat(mon);
         wd.forEach(function(dd){var key=ymd(dd);if((key<sK||key>eK)&&!periodHasShift(periodStartForDate(dd)))known=false;if(isKouDay(m,dd,key))kN++;if(isYukyuDay(m,key))yN++;});
-        if(!known||kN>0)return;
+        if(!known||kN>0||weekHasCompanyOff(mon))return;
         var sat=wd[5],wl=(mon.getMonth()+1)+"/"+mon.getDate()+"(月)〜"+(sat.getMonth()+1)+"/"+sat.getDate()+"(土)の週";
         warnings.push({cat:"week",err:true,text:m.name+"さん "+wl+"に公休がありません（日曜とは別に週1日）"+(yN?"※有給のみ":"")});
       });
     });
-    return {days:days,rows:rows,counts:counts,warnings:warnings,cfg:cfg,studyKey:studyKey,pre:!!pre};
+    // 作成者が「了承済み」にした警告（期間ごと・警告の内容ごと）は一覧から外し、了承済みとしてまとめる
+    var pk=periodKey(periodStart),acked=[];
+    warnings=warnings.filter(function(w){w.key=(w.cat||"staff")+"|"+w.text;if(isWarnAcked(pk,w.key)){acked.push(w);return false;}return true;});
+    return {days:days,rows:rows,counts:counts,warnings:warnings,acked:acked,pk:pk,cfg:cfg,studyKey:studyKey,pre:!!pre};
+  }
+  // 警告の了承：config.warnAcks=[{id,pk,key,at}]（key＝種類|警告文。内容が変わると別の警告として出直す）
+  function isWarnAcked(pk,key){return (state.config.warnAcks||[]).some(function(a){return a.pk===pk&&a.key===key;});}
+  function setWarnAck(pk,key,on){
+    if(!isAdmin())return;
+    var l=(state.config.warnAcks||[]).filter(function(a){return !(a.pk===pk&&a.key===key);});
+    if(on)l.push({id:pk+"|"+key,pk:pk,key:key,at:Date.now()});
+    Store.saveConfig(Object.assign({},state.config,{warnAcks:l})).then(function(){showToast(on?"警告を了承済みにしました":"了承を取り消しました",on?function(){setWarnAck(pk,key,false);}:null);}).catch(function(){alert("保存できませんでした");});
   }
 
   function shortTime(at){var t=new Date(at);return (t.getMonth()+1)+"/"+t.getDate()+" "+pad(t.getHours())+":"+pad(t.getMinutes());}
@@ -1759,7 +1776,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     if(!periodFullyVisible(state.periodStart))return periodBar()+'<div class="panel"><div class="empty"><div class="big">希望休の公開前です</div>シフト表は受注の希望休が公開されてから表示されます（シフト作成者は右上「あなた」で「シフト作成者」を選ぶと作業できます）。</div></div>';
     if(!hasMembers)return periodBar()+bar+'<div class="panel"><div class="empty"><div class="big">メンバーが未登録です</div>先に「メンバー」からメンバーを登録してください。</div></div>';
     if(!kou&&!isAdmin())return periodBar()+bar+'<div class="panel"><div class="empty"><div class="big">シフト未作成</div>シフト作成者がシフトを作成・保存すると、ここに表示されます。</div></div>';
-    if(!kou)return periodBar()+bar+calWarnHtml(computeGrid(state.periodStart,{},true))+'<div class="panel"><div class="empty"><div class="big">シフト未作成</div>「自動作成」を押すと、定休日（日曜）・個別の固定休・登録済みの希望休を反映し、6連勤にならないよう自動で公休を割り当てます。</div></div>';
+    if(!kou)return periodBar()+bar+calWarnHtml(computeGrid(state.periodStart,{},true))+'<div class="panel"><div class="empty"><div class="big">シフト未作成</div>「自動作成」を押すと、日曜の公休・個別の固定休・登録済みの希望休を反映し、6連勤にならないよう自動で公休を割り当てます。</div></div>';
     var g=computeGrid(state.periodStart,kou),days=g.days,cfg=g.cfg;
     var head='<tr><th class="name">メンバー</th>'+days.map(function(d){var cl=(d.getDay()===0||isCompanyOff(ymd(d)))?"sun":(isPremium(d)?"prem":"");var hn=isCompanyOff(ymd(d))?"会社休業日":holiday(ymd(d));var isSt=g.studyKey&&ymd(d)===g.studyKey;return '<th class="'+cl+'"><span class="d">'+d.getDate()+'</span><br>'+WD[d.getDay()]+(hn?'<span class="hn" title="'+esc(hn)+'">'+esc(hn)+'</span>':'')+(isSt?'<span class="hn" style="color:var(--accent)">勉強会</span>':'')+(isNoReqDay(ymd(d))?'<span class="hn" style="color:var(--danger-ink);font-weight:800" title="希望休の提出不可日（全員出勤日）">⛔不可</span>':'')+'</th>';}).join("")+'<th class="koucol">公休</th></tr>';
     var bodyRows="",lastTeam=null;
@@ -1773,7 +1790,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
         if(c.t==="yu")return '<td class="cell yu'+stcl+'" data-act="shift-cell" data-mid="'+esc(r.m.id)+'" data-date="'+c.key+'"'+dp+' title="有給（シフトで設定・タップで勤務に戻す）">有</td>';
         if(c.t==="rq")return '<td class="cell rq '+tkey(c.team)+stcl+'" title="希望休('+esc(c.leave||"")+'・'+esc(c.req.apply||"")+'申請)'+(canEdit(c.req)?'／ドラッグで移動':'')+'"'+(canEdit(c.req)?' data-drag="req" data-id="'+esc(c.id)+'"':'')+dp+'>'+(c.leave==="有給"?"有":"希")+'</td>';
         if(c.t==="co")return '<td class="cell fx'+stcl+'" title="会社休業日（公休には数えません）"'+dp+'>休</td>';
-        if(parseYmd(c.key).getDay()===0)return '<td class="cell fx'+stcl+'" title="定休日（日曜）"'+dp+'>定</td>';
+        if(parseYmd(c.key).getDay()===0)return '<td class="cell ko sunko'+stcl+'" title="日曜（全員公休）"'+dp+'>公</td>';
         return '<td class="cell fx'+stcl+'" title="固定休"'+dp+'>固</td>';
       }).join("");
       var kcls=r.part?"":(r.kou<cfg.kouTarget?"bad":(r.kou>cfg.kouTarget?"warn":"ok"));
@@ -1782,7 +1799,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var footU='<tr><td class="name">受注 出勤</td>'+g.counts.map(function(c){if(c.isSun)return '<td>—</td>';var cls=c.uke<cfg.ukeMin?"bad":((c.isWknd?c.uke<cfg.weekendTarget:c.uke<cfg.ukeTarget)?"warn":"ok");return '<td class="'+cls+'">'+c.uke+'</td>';}).join("")+'<td class="koucol"></td></tr>';
     var footK='<tr><td class="name">経理 出勤</td>'+g.counts.map(function(c){if(c.isSun)return '<td>—</td>';var cls=c.npOff>=2?"bad":"ok";return '<td class="'+cls+'">'+c.kei+'</td>';}).join("")+'<td class="koucol"></td></tr>';
     var table='<table class="shiftgrid"><thead>'+head+'</thead><tbody>'+bodyRows+'</tbody><tfoot>'+footU+footK+'</tfoot></table>';
-    var legend='<div class="shiftlegend"><span><b style="color:var(--accent)">公</b> 公休</span><span><b>希</b>/<b>有</b> 希望休(公休/有休)</span><span><b style="color:var(--warn-ink);background:var(--warn-bg);padding:0 4px;border-radius:4px">有</b> シフトで入れた有給</span><span><b style="color:var(--sun-ink)">定</b> 定休日（日曜）</span><span><b style="color:var(--sun-ink)">固</b> 固定休（個人）</span><span><b style="color:var(--sun-ink)">休</b> 会社休業日（公休に数えない）</span><span>空欄=勤務</span><span><b style="color:var(--warn-ink)">✎</b> 勤務メモあり（出勤）</span><span>「公」「希」「有」はドラッグで別の日へ移動（スマホは長押ししてから）</span><span>公休列=公休日数/目標'+cfg.kouTarget+'（有休は別枠）</span><span>連続勤務上限'+cfg.maxConsec+'日</span></div>';
+    var legend='<div class="shiftlegend"><span><b style="color:var(--accent)">公</b> 公休（日曜の列も公休）</span><span><b>希</b>/<b>有</b> 希望休(公休/有休)</span><span><b style="color:var(--warn-ink);background:var(--warn-bg);padding:0 4px;border-radius:4px">有</b> シフトで入れた有給</span><span><b style="color:var(--sun-ink)">固</b> 固定休（個人）</span><span><b style="color:var(--sun-ink)">休</b> 会社休業日（公休に数えない）</span><span>空欄=勤務</span><span><b style="color:var(--warn-ink)">✎</b> 勤務メモあり（出勤）</span><span>「公」「希」「有」はドラッグで別の日へ移動（スマホは長押ししてから）</span><span>公休列=公休日数/目標'+cfg.kouTarget+'（有休は別枠）</span><span>連続勤務上限'+cfg.maxConsec+'日</span></div>';
     return periodBar()+bar+calWarnHtml(g)+'<div class="shift-scroll">'+table+'</div>'+legend+summaryTable(g);
   }
   // シフトの警告一覧（シフトタブとカレンダーで共通）。種類ごとにまとめて表示
@@ -1803,8 +1820,11 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     return m?'<b>'+m[0]+'</b>'+s.slice(m[0].length):s;
   }
   function warnBoxHtml(g){
-    var preNote=g.pre?'<div class="wpre">※自動作成の前なので、希望休・固定休・定休日だけで判定しています（連勤・公休日数の不足・週1回の公休は、自動作成のあとに判定します）。</div>':'';
-    if(g.warnings.length===0)return '<div class="okbox">✓ '+(g.pre?'希望休の時点で気になる点はありません':'条件をすべて満たしています')+'</div>'+preNote;
+    var preNote=g.pre?'<div class="wpre">※自動作成の前なので、希望休・固定休・日曜の公休だけで判定しています（連勤・公休日数の不足・週1回の公休は、自動作成のあとに判定します）。</div>':'';
+    // 了承済みの警告（開くと一覧と取り消しボタン）
+    var ackedHtml=(g.acked&&g.acked.length)?'<details class="wacked"><summary>✓ 了承済みの警告 '+g.acked.length+'件</summary>'+g.acked.map(function(w){
+      return '<div class="warnitem ok" style="align-items:center"><span class="wi">✓</span><span>'+warnTextHtml(w.text)+'</span>'+(isAdmin()?'<span style="flex:1"></span><button class="linkbtn" style="white-space:nowrap" data-act="wunack" data-pk="'+esc(g.pk)+'" data-key="'+esc(encodeURIComponent(w.key))+'">取り消す</button>':'')+'</div>';}).join("")+'</details>':'';
+    if(g.warnings.length===0)return '<div class="okbox">✓ '+(g.pre?'希望休の時点で気になる点はありません':'条件をすべて満たしています')+'</div>'+preNote+ackedHtml;
     var html=preNote;
     WARN_CATS.forEach(function(c){
       var ws=g.warnings.filter(function(w){return (w.cat||"staff")===c[0];});if(!ws.length)return;
@@ -1812,10 +1832,12 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       var hasErr=ws.some(function(w){return w.err;});
       html+='<div class="wgrp'+(hasErr?' err':'')+'"><div class="wgh">'+esc(c[1])+'<span class="wgc">'+ws.length+'件</span></div><div class="wgd">'+esc(c[2])+'</div>'+
         ws.map(function(w){
-          var btns=isAdmin()?(w.acks||[]).map(function(a){return '<button class="linkbtn" style="color:var(--accent);white-space:nowrap" data-act="ack" data-id="'+esc(a.r.id)+'" data-kind="'+a.kind+'">'+((w.acks.length>1)?esc(a.r.name)+'を':'')+'了承済みにする</button>';}).join(""):'';
+          // 希望休にひもづく警告は希望休ごとに了承（日付を変えると外れる）。それ以外は警告そのものを了承
+          var btns=!isAdmin()?'':(w.acks&&w.acks.length)?w.acks.map(function(a){return '<button class="linkbtn" style="color:var(--accent);white-space:nowrap" data-act="ack" data-id="'+esc(a.r.id)+'" data-kind="'+a.kind+'">'+((w.acks.length>1)?esc(a.r.name)+'を':'')+'了承済みにする</button>';}).join("")
+            :'<button class="linkbtn" style="color:var(--accent);white-space:nowrap" data-act="wack" data-pk="'+esc(g.pk)+'" data-key="'+esc(encodeURIComponent(w.key))+'">了承済みにする</button>';
           return '<div class="warnitem'+(w.err?' err':'')+'" style="align-items:center"><span class="wi">'+(w.err?'！':'△')+'</span><span>'+warnTextHtml(w.text)+'</span>'+(btns?'<span style="flex:1"></span>'+btns:'')+'</div>';}).join("")+'</div>';
     });
-    return '<div class="warnbox">'+html+'</div>';
+    return '<div class="warnbox">'+html+ackedHtml+'</div>';
   }
   // 見出し付き・開閉できる警告一覧（シフトタブとカレンダーで共通。pre＝自動作成前の判定）
   function calWarnHtml(g){
@@ -1919,7 +1941,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var tab=state.dayTab||"info";if(tab==="shift"&&!(isAdmin()&&periodFullyVisible(periodStartForDate(d))))tab="info";
     var tabs='<div class="daytabs">'+dayTabsHtml(tab,key)+'</div>';
     if(tab==="info"&&!((d.getDay()===0&&state.config.sundayFixed)||isCompanyOff(key))){body.innerHTML=tabs+dayInfoHtml(key)+'<div class="foot"><span style="flex:1"></span><button class="btn primary" data-act="day-close">閉じる</button></div>';return;}
-    if((d.getDay()===0&&state.config.sundayFixed)||isCompanyOff(key)){body.innerHTML='<div style="padding:18px"><p class="hint" style="margin:0">'+(isCompanyOff(key)?'会社休業日のため全員休みです。':'日曜は定休日のため全員休みです。')+'</p></div><div class="foot"><span style="flex:1"></span><button class="btn primary" data-act="day-close">閉じる</button></div>';return;}
+    if((d.getDay()===0&&state.config.sundayFixed)||isCompanyOff(key)){body.innerHTML='<div style="padding:18px"><p class="hint" style="margin:0">'+(isCompanyOff(key)?'会社休業日のため全員休みです。':'日曜は全員公休です。')+'</p></div><div class="foot"><span style="flex:1"></span><button class="btn primary" data-act="day-close">閉じる</button></div>';return;}
     var kou=currentKou()||{};
     var members=sortedMembers(),cfg=Object.assign({ukeMin:2,ukeTarget:3,weekendTarget:3},state.config);
     var uw=0,kw=0,npOff=0,rows="",lastTeam=null;
@@ -2018,7 +2040,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     document.getElementById("fNote").placeholder=memo?"例）15時退勤／16:30まで　など":"例）午前のみ／通院のため　など";
     document.getElementById("addTitle").textContent=(memo?"メモを":"希望休を")+(state.editReq?"編集":"追加");
   }
-  // 登録できない日（定休日・休業日・提出不可日・締切後など）は赤い注意にして「追加する」を押せなくする
+  // 登録できない日（日曜の公休・休業日・提出不可日・締切後など）は赤い注意にして「追加する」を押せなくする
   function checkAddNote(){
     document.getElementById("addNote").classList.remove("strong");
     var blocked=checkAddNoteInner(),note=document.getElementById("addNote"),btn=document.getElementById("addSaveBtn");
@@ -2030,7 +2052,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function checkAddNoteInner(){
     syncApply();syncMemoUI();
     var note=document.getElementById("addNote"),v=document.getElementById("fDate").value;
-    if(v&&state.config.sundayFixed&&parseYmd(v).getDay()===0){note.textContent="この日は日曜（定休日）のため全員休みです（申請不要）。";note.classList.add("on");return true;}
+    if(v&&state.config.sundayFixed&&parseYmd(v).getDay()===0){note.textContent="この日は日曜（全員公休）のため全員休みです（申請不要）。";note.classList.add("on");return true;}
     if(v&&isCompanyOff(v)){note.textContent="この日は会社休業日のため全員休みです（申請不要）。";note.classList.add("on");return true;}
     if(v&&state.addLeave!==MEMO&&isNoReqDay(v)){
       note.innerHTML=isAdmin()?'<b>⚠ この日は希望休の提出不可日（全員出勤日）です</b><br>シフト作成者として例外的に登録できます。'
@@ -2059,7 +2081,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     var m=state.members.filter(function(x){return x.id===mid;})[0];
     if(!m){note.textContent="メンバーを選んでください。";note.classList.add("on");return;}
     if(!date){note.textContent="日付を選んでください。";note.classList.add("on");return;}
-    if(state.config.sundayFixed&&parseYmd(date).getDay()===0){note.textContent="日曜は定休日のため登録できません。";note.classList.add("on");return;}
+    if(state.config.sundayFixed&&parseYmd(date).getDay()===0){note.textContent="日曜は全員公休のため登録できません。";note.classList.add("on");return;}
     if(isCompanyOff(date)){note.textContent="会社休業日のため登録できません。";note.classList.add("on");return;}
     if(state.addLeave!==MEMO&&isNoReqDay(date)&&!isAdmin()){note.textContent="この日は希望休の提出不可日（全員出勤日）のため登録できません。休みが必要な場合はシフト作成者に相談してください。";note.classList.add("on");return;}
     if(state.addLeave==="公休"&&!isAdmin()&&isPremium(parseYmd(date))&&premKouCount(m,periodStartForDate(parseYmd(date)),state.editReq&&state.editReq.id)>=PREM_KOU_MAX){note.textContent="月・金・土の公休希望は1期間に"+PREM_KOU_MAX+"回までのため、これ以上は入力できません。";note.classList.add("on");return;}
@@ -2106,10 +2128,10 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       body.innerHTML='<div class="form">'+
         '<div class="field"><label for="mName">名前</label><input type="text" id="mName" value="'+esc(m.name||"")+'" placeholder="例）佐藤"></div>'+
         '<div class="field"><label for="mTeam">チーム</label><select id="mTeam"><option value="受注"'+(m.team==="受注"?" selected":"")+'>受注</option><option value="経理"'+(m.team==="経理"?" selected":"")+'>経理</option></select></div>'+
-        '<div class="field"><label>固定休にする曜日（日曜は全員の定休日）</label><div class="wdays" id="mWdays">'+wd+'</div></div>'+
+        '<div class="field"><label>固定休にする曜日（日曜は全員の公休）</label><div class="wdays" id="mWdays">'+wd+'</div></div>'+
         '<div class="field"><label class="chkrow"><input type="checkbox" id="mHol" '+(m.offHolidays?"checked":"")+'> 祝日も固定休にする</label></div>'+
         '<div class="field"><label class="chkrow"><input type="checkbox" id="mPart" '+(m.partTime?"checked":"")+'> パート（自動シフトの「非パート2人」判定から除外）</label></div>'+
-        '<p class="hint">例）パートさん＝土にチェック＋祝日にチェック＋この「パート」にチェック（日曜は全員の定休日）。</p>'+
+        '<p class="hint">例）パートさん＝土にチェック＋祝日にチェック＋この「パート」にチェック（日曜は全員の公休）。</p>'+
         '<div class="field"><label>自動作成で、なるべく公休を入れない曜日（本人の希望）</label><div class="wdays" id="mAvoid">'+av+'</div>'+
         '<p class="hint" style="margin:6px 0 0">自動作成では、ほかに入れられる日がない場合だけこの曜日に公休を入れます。本人が希望休を出した日はそのまま休みになります。<br>※できるだけ考慮しますが、出勤人数やほかの人の休み・ルールによっては、ご希望に沿えない場合があります。</p></div>'+
         '</div><div class="foot">'+
@@ -2264,7 +2286,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function saveStudyDates(map){var cfg=Object.assign({},state.config,{studyDates:map});Store.saveConfig(cfg).then(function(){closeStudy();}).catch(function(e){alert("保存できませんでした");});}
   function saveStudy(){
     var v=document.getElementById("fStudy").value,s=state.periodStart,note=document.getElementById("studyNote");if(!v){closeStudy();return;}
-    var err=(v<ymd(s)||v>ymd(periodEnd(s)))?"この期間（"+periodLabel(s)+"）の中の日付を選んでください。":(state.config.sundayFixed&&parseYmd(v).getDay()===0)?"日曜は定休日のため選べません。":"";
+    var err=(v<ymd(s)||v>ymd(periodEnd(s)))?"この期間（"+periodLabel(s)+"）の中の日付を選んでください。":(state.config.sundayFixed&&parseYmd(v).getDay()===0)?"日曜は全員公休のため選べません。":"";
     if(err){note.textContent=err;note.classList.add("on");return;}
     var def=studyDefault(s);var mp=Object.assign({},state.config.studyDates||{});
     // 第3火曜日を選び直した場合は「既定」に戻す
@@ -2312,7 +2334,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       h4(2,"希望休を出す")+
       '<ol><li>カレンダーで休みたい日をタップ → <span class="k">＋ 自分の希望休を入力</span> に切り替え（または右上の <span class="k">＋ 希望休を追加</span>）<br><span class="hint">日付をタップすると、まず「この日の状況」（その日に誰が何を入れているか）が出ます。公開前は、ほかの受注メンバーの希望休は表示されません。</span></li>'+
       '<li>区分を選ぶ：<b>有給</b> または <b>公休</b></li><li>必要なら備考を書いて <span class="k">追加する</span></li></ol>'+
-      '<p>定休日（日曜）と会社休業日は全員休みなので、出す必要はありません。カレンダーに「定休日」「会社休業日」と表示されます。<br><span class="hint">今の会社休業日：'+helpCoList()+'</span></p>'+
+      '<p>日曜の公休と会社休業日は全員休みなので、出す必要はありません。カレンダーに「公休（日曜）」「会社休業日」と表示されます。<br><span class="hint">今の会社休業日：'+helpCoList()+'</span></p>'+
       h4(3,"事前申請と通常申請（自動で決まります）")+
       '<table><tr><th>入力した日</th><th>区分</th></tr>'+
       '<tr><td>期間が始まる前月の15日（タイムカード締日）まで</td><td><b>事前申請</b></td></tr>'+
@@ -2355,10 +2377,10 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<tr><td>日付をタップ</td><td>「この日の状況」：その日の全員の希望休・メモ・固定休（シフト保存後はシフトの公休・出勤も）。タブで入力画面に切り替え</td></tr>'+
       '<tr><td>● 名前 公</td><td>シフト作成で入った公休</td></tr>'+
       '<tr><td>● 名前 有（黄色）</td><td>シフト作成者がシフト上で入れた有給</td></tr>'+
-      '<tr><td>斜線のマス</td><td>定休日（日曜）・会社休業日（全員休み）</td></tr>'+
+      '<tr><td>斜線のマス</td><td>日曜の公休・会社休業日（全員休み）</td></tr>'+
       '<tr><td>固定（点線）</td><td>個人の固定休（パートの土曜・祝日など）。パートの休業日（'+helpPoList()+'）もパートの人は固定休になります</td></tr>'+
       '<tr><td>経理出勤日／勉強会／📢 お知らせの日</td><td>日付の下に表示</td></tr>'+
-      '<tr><td>シフトタブ</td><td>公開後に、全員の勤務・休みの表が見られます（公＝公休、希・有＝希望休、黄色の有＝シフトで入れた有給、定＝定休日（日曜）、固＝個人の固定休、休＝会社休業日、空欄＝勤務）</td></tr></table>';
+      '<tr><td>シフトタブ</td><td>公開後に、全員の勤務・休みの表が見られます（公＝公休（日曜の列も「公」）、希・有＝希望休、黄色の有＝シフトで入れた有給、固＝個人の固定休、休＝会社休業日、空欄＝勤務）</td></tr></table>';
   }
   function helpAdmin(){
     var c=helpCfg();
@@ -2372,8 +2394,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<li><b>シフト自動作成</b>：<span class="k">シフト自動作成（全員）</span> を押す → 内容を確認・手直し → <span class="k">保存</span>。<br>チームごとに作り直したいときは <span class="k">受注だけ作成</span>／<span class="k">経理だけ作成</span>（もう一方のチームの公休は今の状態のまま残ります）。</li></ol>'+
       '<div class="box warn"><b>保存するまで全員には反映されません。</b>自動作成や手直しは自分の画面だけの下書きです。<span class="k">取消</span> を押すか、保存せずにページを閉じると元に戻ります。</div>'+
       h4(3,"自動作成のルール")+
-      '<ul><li>公休は1期間 <b>'+c.kouTarget+'日</b>（定休日の日曜を含む。会社休業日は含まない）</li>'+
-      '<li><b>週に1回</b>、日曜とは別に月〜土で公休を1日（有給は数えない）</li>'+
+      '<ul><li>公休は1期間 <b>'+c.kouTarget+'日</b>（日曜の公休を含む。会社休業日は含まない）</li>'+
+      '<li><b>週に1回</b>、日曜とは別に月〜土で公休を1日（有給は数えない）。<b>会社休業日を含む週</b>（年末年始など）は対象外</li>'+
       '<li>連続勤務は <b>'+c.maxConsec+'日まで</b>（'+(c.maxConsec+1)+'連勤にしない。期間をまたぐ連勤は警告で表示）</li>'+
       '<li>受注は1日 <b>'+c.ukeMin+'人以上</b>出勤、月・金・土は <b>'+c.weekendTarget+'人以上</b></li>'+
       '<li>経理の常勤（'+helpKeiri()+'）は同じ日に休ませない（有給も含む）</li>'+
@@ -2396,7 +2418,9 @@ body.dragging,body.dragging *{cursor:grabbing!important}
       '<p>警告は<b>シフトタブの表の上</b>と<b>カレンダーの下</b>（「⚠ シフトの警告 ○件」、▶で開閉）に出ます。「要対応」（赤）はルール違反、「注意」（黄）は確認が必要なものです。警告は<b>種類ごと</b>（出勤人数・経理出勤日・お知らせの対象日・提出不可日・勉強会・月金土の公休希望・連勤・公休日数・週1回の公休）にまとめて、どうすればよいかと一緒に表示します。<b>保存を押す前（下書きの段階）から</b>、自動作成や手直しをするたびにすぐ更新されます。保存前に警告を確認してから <span class="k">保存</span> してください。</p>'+
       '<p><b>自動作成の前</b>でも、希望休が入った時点で引っかかる点があれば「⚠ 希望休の時点での警告（自動作成前）」として出ます（受注の人数不足、経理常勤の同時休み、経理出勤日・提出不可日・勉強会の日の休み、月金土の公休希望の上限超え、公休が多すぎる人）。連勤・公休日数の不足・週1回の公休は、自動作成のあとに判定します。</p>'+
       '<p>希望休の <span class="tag adj">要調整</span>／<span class="tag judge">判断</span> は、希望休が入力された時点で判定されます（希望休は入力するとすぐ保存されます）。作成者の表示ではいつでも、メンバーには公開後に表示されます。</p>'+
-      '<p>経理出勤日や勉強会の日の希望休など、承知のうえで認める場合は <span class="k">了承済みにする</span> を押すと警告が消えます。一覧の「✓了承済」の×で取り消せます。</p>'+
+      '<p>問題ない警告は、<b>どの警告でも</b> <span class="k">了承済みにする</span> を押すと一覧から消え、下の「✓ 了承済みの警告 ○件」にまとまります（開くと <span class="k">取り消す</span> で戻せます）。</p>'+
+      '<ul><li>経理出勤日・勉強会・提出不可日・お知らせの日の<b>希望休</b>は、希望休ごとに了承します（日付や人を変えると外れます。一覧の「✓了承済」の×でも取り消せます）。</li>'+
+      '<li>それ以外（出勤人数・連勤・公休日数・週1回の公休など）は、<b>その期間のその警告</b>を了承します。内容が変わる（人数や日数が変わる）と、新しい警告として出直します。</li></ul>'+
       h4(6,"設定・メンバー")+
       '<ul><li><span class="k">設定</span>：被り警告の人数、受注の人数、連勤の上限、公休日数、日曜の扱い、<b>会社休業日</b>の追加・削除、<b>受注の優先順位（ローテーション）</b>の編集</li>'+
       '<li><b>会社休業日</b>：<span class="k">設定</span> で日付を選んで <span class="k">追加</span> → <span class="k">保存</span>。「毎年」にチェックすると毎年同じ日（お盆・年末年始など）、外すとその年だけ。全員休みになり、公休には数えません（公休'+c.kouTarget+'日・週1公休は別に入ります）。今の設定：'+helpCoList()+'</li>'+
@@ -2435,7 +2459,7 @@ body.dragging,body.dragging *{cursor:grabbing!important}
   function dropReason(src,tgt){
     var to=tgt.date;if(!to)return "ここには移動できません";
     var d=parseYmd(to),s=state.periodStart;
-    if(state.config.sundayFixed&&d.getDay()===0)return "日曜は定休日です";
+    if(state.config.sundayFixed&&d.getDay()===0)return "日曜は全員公休です";
     if(isCompanyOff(to))return "会社休業日です";
     if(isNoReqDay(to)&&!isAdmin()&&(src.kind==="kou"||!isMemo(reqById(src.id))))return "希望休の提出不可日（全員出勤日）です";
     if(src.kind==="req"&&!isAdmin()){var pr=reqById(src.id),pm=pr&&reqMember(pr);
@@ -2542,6 +2566,8 @@ body.dragging,body.dragging *{cursor:grabbing!important}
     else if(a==="add-day"){if(state.storeReady)openAdd(t.dataset.date);}
     else if(a==="publish-now"){publishNow();}
     else if(a==="ack"){setAck(t.dataset.id,t.dataset.kind,true);}
+    else if(a==="wack"){setWarnAck(t.dataset.pk,decodeURIComponent(t.dataset.key),true);}
+    else if(a==="wunack"){var wpk=t.dataset.pk,wky=decodeURIComponent(t.dataset.key);askConfirm("この警告の了承を取り消しますか？",function(){setWarnAck(wpk,wky,false);},"取り消す");}
     else if(a==="unack"){var ur=reqById(t.dataset.id);if(ur&&isAdmin())askConfirm(ur.name+"さんの希望休（"+mdLabel(ur.date)+"）の了承（"+ACK_LABEL[t.dataset.kind]+"）を取り消しますか？",function(){setAck(t.dataset.id,t.dataset.kind,false);},"取り消す");}
     else if(a==="add-close"){closeAdd();}
     else if(a==="goto-members"){closeAdd();openMembers();}
